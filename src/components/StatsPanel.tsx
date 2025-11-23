@@ -1,4 +1,4 @@
-import mascot from "@/assets/capybara-mascot.png";
+import cap3 from "@/assets/cap3.png";
 
 const StatsPanel = () => {
   return (
@@ -26,7 +26,7 @@ const StatsPanel = () => {
 
       <div className="flex items-center justify-center mt-8">
         <img 
-          src={mascot} 
+          src={cap3} 
           alt="Capybara mascot" 
           className="w-full max-w-sm object-contain"
         />

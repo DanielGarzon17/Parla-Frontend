@@ -17,6 +17,8 @@ const buttonVariants = cva(
         success: "bg-success text-success-foreground hover:bg-success/90",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        flashcard: "bg-card text-card-foreground border-2 border-primary/30 hover:border-primary/50 hover:shadow-lg",
+        learn: "bg-learn text-learn-foreground hover:bg-learn/90",
       },
       size: {
         default: "h-10 px-4 py-2",

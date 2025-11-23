@@ -43,6 +43,10 @@ export default {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
         },
+        learn: {
+          DEFAULT: "hsl(var(--learn))",
+          foreground: "hsl(var(--learn-foreground))",
+        },
         stat: {
           bg: "hsl(var(--stat-bg))",
           foreground: "hsl(var(--stat-foreground))",
@@ -55,6 +59,37 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        "card-left": {
+
+          DEFAULT: "hsl(var(--card-left))",
+
+          foreground: "hsl(var(--card-left-foreground))",
+
+          selected: "hsl(var(--card-left-selected))",
+
+        },
+
+        "card-right": {
+
+          DEFAULT: "hsl(var(--card-right))",
+
+          foreground: "hsl(var(--card-right-foreground))",
+
+          selected: "hsl(var(--card-right-selected))",
+
+        },
+
+        "back-button": "hsl(var(--back-button))",
+
+        "continue-button": "hsl(var(--continue-button))",
+
+        "check-icon": {
+
+          DEFAULT: "hsl(var(--check-icon))",
+
+          selected: "hsl(var(--check-icon-selected))",
+
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
@@ -65,6 +100,21 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        quiz: {
+
+          card: "hsl(var(--quiz-card))",
+
+          "card-hover": "hsl(var(--quiz-card-hover))",
+
+        },
+
+        "button-primary": "hsl(var(--button-primary))",
+
+        "button-secondary": "hsl(var(--button-secondary))",
+
+        "timer-ring": "hsl(var(--timer-ring))",
+
+        "avatar-bg": "hsl(var(--avatar-bg))",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -92,6 +142,7 @@ export default {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "bounce-slow": "bounce 3s ease-in-out infinite",
       },
     },
   },

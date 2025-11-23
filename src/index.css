@@ -96,3 +96,424 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+
+
+@layer base {
+
+  .matchcards-theme {
+
+    --background: 250 100% 95%;
+
+    --foreground: 250 20% 20%;
+
+
+
+    --card: 0 0% 100%;
+
+    --card-foreground: 250 20% 20%;
+
+
+
+    --popover: 0 0% 100%;
+
+    --popover-foreground: 250 20% 20%;
+
+
+
+    --primary: 250 70% 60%;
+
+    --primary-foreground: 0 0% 100%;
+
+
+
+    --secondary: 250 60% 70%;
+
+    --secondary-foreground: 250 20% 20%;
+
+
+
+    --muted: 250 40% 90%;
+
+    --muted-foreground: 250 10% 50%;
+
+
+
+    --accent: 250 80% 65%;
+
+    --accent-foreground: 0 0% 100%;
+
+
+
+    --destructive: 0 84.2% 60.2%;
+
+    --destructive-foreground: 0 0% 100%;
+
+
+
+    --border: 250 30% 85%;
+
+    --input: 250 30% 85%;
+
+    --ring: 250 70% 60%;
+
+
+
+    --radius: 1rem;
+
+
+
+    /* Match Cards Design System */
+
+    --card-left: 250 75% 80%;
+
+    --card-left-foreground: 250 30% 25%;
+
+    --card-left-selected: 250 70% 60%;
+
+    
+
+    --card-right: 220 15% 25%;
+
+    --card-right-foreground: 0 0% 100%;
+
+    --card-right-selected: 250 70% 60%;
+
+    
+
+    --back-button: 250 70% 40%;
+
+    --continue-button: 250 50% 55%;
+
+    
+
+    --check-icon: 250 70% 40%;
+
+    --check-icon-selected: 0 0% 100%;
+
+
+
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+  }
+
+
+
+  .dark2 {
+
+    --background: 250 30% 10%;
+
+    --foreground: 250 20% 90%;
+
+
+
+    --card: 250 25% 15%;
+
+    --card-foreground: 250 20% 90%;
+
+
+
+    --popover: 250 25% 15%;
+
+    --popover-foreground: 250 20% 90%;
+
+
+
+    --primary: 250 70% 60%;
+
+    --primary-foreground: 0 0% 100%;
+
+
+
+    --secondary: 250 25% 20%;
+
+    --secondary-foreground: 250 20% 90%;
+
+
+
+    --muted: 250 25% 20%;
+
+    --muted-foreground: 250 15% 60%;
+
+
+
+    --accent: 250 70% 60%;
+
+    --accent-foreground: 0 0% 100%;
+
+
+
+    --destructive: 0 62.8% 30.6%;
+
+    --destructive-foreground: 0 0% 100%;
+
+
+
+    --border: 250 25% 20%;
+
+    --input: 250 25% 20%;
+
+    --ring: 250 70% 60%;
+
+
+
+    --card-left: 250 50% 30%;
+
+    --card-left-foreground: 250 30% 85%;
+
+    --card-left-selected: 250 70% 60%;
+
+    
+
+    --card-right: 220 15% 20%;
+
+    --card-right-foreground: 0 0% 90%;
+
+    --card-right-selected: 250 70% 60%;
+
+    
+
+    --back-button: 250 70% 50%;
+
+    --continue-button: 250 50% 50%;
+
+    
+
+    --check-icon: 250 70% 50%;
+
+    --check-icon-selected: 0 0% 100%;
+
+
+
+    --sidebar-background: 240 5.9% 10%;
+
+    --sidebar-foreground: 240 4.8% 95.9%;
+
+    --sidebar-primary: 224.3 76.3% 48%;
+
+    --sidebar-primary-foreground: 0 0% 100%;
+
+    --sidebar-accent: 240 3.7% 15.9%;
+
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+
+    --sidebar-border: 240 3.7% 15.9%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+  }
+
+}
+
+@layer base {
+  .timetrial-theme {
+    --background: 270 50% 92%;
+    --foreground: 270 20% 20%;
+
+    --card: 270 35% 75%;
+    --card-foreground: 270 50% 15%;
+
+    --popover: 270 50% 98%;
+    --popover-foreground: 270 20% 20%;
+
+    --primary: 270 40% 25%;
+    --primary-foreground: 270 50% 98%;
+
+    --secondary: 270 35% 70%;
+    --secondary-foreground: 270 50% 15%;
+
+    --muted: 270 30% 80%;
+    --muted-foreground: 270 20% 40%;
+
+    --accent: 280 50% 60%;
+    --accent-foreground: 270 50% 98%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 270 25% 85%;
+    --input: 270 50% 98%;
+    --ring: 270 40% 25%;
+
+    --radius: 1rem;
+    
+    /* Custom tokens for the learning app */
+    --quiz-card: 270 45% 68%;
+    --quiz-card-hover: 270 45% 63%;
+    --button-primary: 270 50% 50%;
+    --button-secondary: 270 30% 65%;
+    --timer-ring: 270 10% 15%;
+    --avatar-bg: 270 35% 80%;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark3 {
+    --background: 270 30% 15%;
+    --foreground: 270 20% 95%;
+
+    --card: 270 35% 25%;
+    --card-foreground: 270 20% 95%;
+
+    --popover: 270 30% 15%;
+    --popover-foreground: 270 20% 95%;
+
+    --primary: 270 50% 70%;
+    --primary-foreground: 270 30% 15%;
+
+    --secondary: 270 25% 30%;
+    --secondary-foreground: 270 20% 95%;
+
+    --muted: 270 25% 25%;
+    --muted-foreground: 270 20% 65%;
+
+    --accent: 280 50% 60%;
+    --accent-foreground: 270 20% 95%;
+
+    --destructive: 0 62.8% 50%;
+    --destructive-foreground: 270 20% 95%;
+
+    --border: 270 25% 30%;
+    --input: 270 30% 20%;
+    --ring: 270 50% 70%;
+    
+    --quiz-card: 270 35% 30%;
+    --quiz-card-hover: 270 35% 35%;
+    --button-primary: 270 50% 55%;
+    --button-secondary: 270 30% 35%;
+    --timer-ring: 270 20% 85%;
+    --avatar-bg: 270 30% 25%;
+  }
+}
+
+@layer base {
+  .flashcards {
+    --background: 270 40% 93%;
+    --foreground: 270 15% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 270 15% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 270 15% 15%;
+
+    --primary: 265 45% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 265 30% 85%;
+    --secondary-foreground: 270 15% 15%;
+
+    --muted: 265 25% 90%;
+    --muted-foreground: 270 10% 50%;
+
+    --accent: 265 40% 75%;
+    --accent-foreground: 270 15% 15%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --learn: 0 84% 60%;
+    --learn-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 265 20% 85%;
+    --input: 265 20% 85%;
+    --ring: 265 45% 65%;
+
+    --radius: 1rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark4 {
+    --background: 270 40% 93%;
+    --foreground: 270 15% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 270 15% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 270 15% 15%;
+
+    --primary: 265 45% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 265 30% 85%;
+    --secondary-foreground: 270 15% 15%;
+
+    --muted: 265 25% 90%;
+    --muted-foreground: 270 10% 50%;
+
+    --accent: 265 40% 75%;
+    --accent-foreground: 270 15% 15%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --learn: 0 84% 60%;
+    --learn-foreground: 0 0% 100%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 265 20% 85%;
+    --input: 265 20% 85%;
+    --ring: 265 45% 65%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
