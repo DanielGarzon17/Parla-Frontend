@@ -1,7 +1,15 @@
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { LogOut } from "lucide-react";
 
 const PracticeModeMenu = () => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
   return (
     <div className="space-y-4">
@@ -29,6 +37,23 @@ const PracticeModeMenu = () => {
         onClick={() => navigate("/match")}
       >
         Match cards
+      </button>
+
+      {/* Progress Dashboard */}
+      <button
+        className="w-full bg-accent hover:bg-accent/90 text-accent-foreground py-3 rounded-xl transition font-semibold"
+        onClick={() => navigate("/progress")}
+      >
+        📊 Your Progress
+      </button>
+
+      {/* Logout Button */}
+      <button
+        className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground py-3 rounded-xl transition font-semibold flex items-center justify-center gap-2"
+        onClick={handleLogout}
+      >
+        <LogOut className="w-4 h-4" />
+        Logout
       </button>
     </div>
   );
