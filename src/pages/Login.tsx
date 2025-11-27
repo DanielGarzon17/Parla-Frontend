@@ -2,6 +2,7 @@ import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect } from 'react';
+import logo from '@/assets/logo.png';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -38,22 +39,8 @@ const Login = () => {
         <div className="flex justify-center mb-8">
           <div className="relative">
             {/* Speech bubble */}
-            <div className="bg-white/90 rounded-full p-8 shadow-2xl relative">
-              {/* Capybara face */}
-              <div className="w-24 h-24 bg-orange-400 rounded-full relative mx-auto">
-                {/* Eyes */}
-                <div className="absolute top-4 left-4 w-3 h-3 bg-black rounded-full"></div>
-                <div className="absolute top-4 right-4 w-3 h-3 bg-black rounded-full"></div>
-                {/* Nose */}
-                <div className="absolute top-8 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-black rounded-full"></div>
-                {/* Ears */}
-                <div className="absolute -top-2 left-2 w-4 h-6 bg-orange-600 rounded-full transform -rotate-12"></div>
-                <div className="absolute -top-2 right-2 w-4 h-6 bg-orange-600 rounded-full transform rotate-12"></div>
-              </div>
-              
-              {/* Speech bubble tail */}
-              <div className="absolute bottom-0 left-8 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-white/90 transform translate-y-full"></div>
-            </div>
+            <img src={logo} alt="User avatar" className="w-30 h-30 object-cover" />
+            
           </div>
         </div>
 
