@@ -1,46 +1,236 @@
-import { FlashCard } from "@/components/FlashCard2";
-import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import logo from "@/assets/logo.png";
-import cap2 from "@/assets/cap2.png";
+// FlashCards Practice Page (HU10, HU10.1, HU10.2, HU10.3)
+// Practice saved phrases with gamification
+
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Shuffle, BookOpen } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import FlashCardPractice from '@/components/FlashCardPractice';
+import SessionSummary from '@/components/SessionSummary';
+import ParticlesBackground from '@/components/ParticlesBackground';
+import { useTheme } from '@/hooks/useTheme';
+import { SavedPhrase } from '@/types/phrases';
+import { fetchPhrases } from '@/services/phrasesService';
+import { getUserStats, completePracticeSession } from '@/services/gamificationService';
+import { Achievement } from '@/types/gamification';
+import logo from '@/assets/logo.png';
+import cap2 from '@/assets/cap2.png';
+
+type SessionState = 'loading' | 'ready' | 'practicing' | 'summary' | 'empty';
 
 const FlashCardsPage = () => {
+  const navigate = useNavigate();
+  const { isDark } = useTheme();
+  
+  // State
+  const [sessionState, setSessionState] = useState<SessionState>('loading');
+  const [phrases, setPhrases] = useState<SavedPhrase[]>([]);
+  const [practiceQueue, setPracticeQueue] = useState<SavedPhrase[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [correctAnswers, setCorrectAnswers] = useState(0);
+  const [sessionStreak, setSessionStreak] = useState(0);
+  const [userStats, setUserStats] = useState(getUserStats());
+  const [sessionResults, setSessionResults] = useState<{
+    pointsEarned: { basePoints: number; streakBonus: number; perfectBonus: number; total: number };
+    newAchievements: Achievement[];
+  } | null>(null);
+
+  // Load phrases on mount
+  useEffect(() => {
+    const loadPhrases = async () => {
+      try {
+        const data = await fetchPhrases();
+        setPhrases(data);
+        if (data.length === 0) {
+          setSessionState('empty');
+        } else {
+          setSessionState('ready');
+        }
+      } catch (error) {
+        console.error('Error loading phrases:', error);
+        setSessionState('empty');
+      }
+    };
+    loadPhrases();
+  }, []);
+
+  // Shuffle and prepare practice queue
+  const startPractice = () => {
+    const shuffled = [...phrases].sort(() => Math.random() - 0.5);
+    // Take up to 10 phrases for a session
+    const sessionPhrases = shuffled.slice(0, Math.min(10, shuffled.length));
+    setPracticeQueue(sessionPhrases);
+    setCurrentIndex(0);
+    setCorrectAnswers(0);
+    setSessionStreak(0);
+    setSessionState('practicing');
+  };
+
+  // Handle answer
+  const handleAnswer = (correct: boolean) => {
+    if (correct) {
+      setCorrectAnswers(prev => prev + 1);
+      setSessionStreak(prev => prev + 1);
+    } else {
+      setSessionStreak(0);
+    }
+
+    // Move to next card or finish
+    if (currentIndex < practiceQueue.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    } else {
+      // Session complete - calculate results
+      const finalCorrect = correct ? correctAnswers + 1 : correctAnswers;
+      const result = completePracticeSession('flashcards', practiceQueue.length, finalCorrect);
+      setUserStats(result.stats);
+      setSessionResults({
+        pointsEarned: result.pointsEarned,
+        newAchievements: result.newAchievements,
+      });
+      setSessionState('summary');
+    }
+  };
+
+  const currentPhrase = practiceQueue[currentIndex];
+
   return (
-    <div className="flashcards min-h-screen bg-background relative overflow-hidden">
+    <div className={`min-h-screen relative overflow-hidden transition-colors duration-300 ${
+      isDark 
+        ? 'bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900' 
+        : 'bg-gradient-to-br from-purple-100 via-pink-50 to-purple-100'
+    }`}>
+      {/* Animated particles background */}
+      <ParticlesBackground 
+        particleCount={40}
+        colors={['#a855f7', '#8b5cf6', '#fbbf24', '#22c55e']}
+        darkColors={['#c084fc', '#a78bfa', '#fcd34d', '#4ade80']}
+      />
+
       {/* Header */}
-      <header className="flex items-center justify-between p-6">
-        <Button variant="ghost" size="icon" className="rounded-full"
-          onClick={() => window.history.back()}>
-          <ArrowLeft className="w-6 h-6" />
-        </Button>
-        <h1 className="text-2xl font-bold text-foreground">FlashCards</h1>
-        <div className="w-20 h-20 bg-accent rounded-full flex items-center justify-center shadow-lg">
+      <header className="relative z-10 flex items-center justify-between p-6 pl-20 lg:pl-6">
+        <div className="w-10 lg:hidden"></div> {/* Spacer for mobile menu button */}
+        
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold text-foreground">FlashCards</h1>
+          {sessionState === 'practicing' && (
+            <div className="bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm font-bold">
+              ⭐ {userStats.totalPoints} pts
+            </div>
+          )}
+        </div>
+
+        <div className="w-16 h-16 bg-accent rounded-full flex items-center justify-center shadow-lg">
           <img
             src={logo}
             alt="Capybara mascot"
-            className="w-20 h-20 object-contain"
+            className="w-16 h-16 object-contain"
           />
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex items-center justify-center px-4 py-8">
-        <FlashCard
-          level="A1 Level"
-          word="mother"
-          pronunciation="[ˈmʌðə]"
-          translation="mama"
-        />
+      <main className="relative z-10 flex items-center justify-center px-4 py-8 min-h-[calc(100vh-120px)]">
+        {/* Loading State */}
+        {sessionState === 'loading' && (
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Cargando frases...</p>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {sessionState === 'empty' && (
+          <div className={`text-center backdrop-blur rounded-3xl p-8 max-w-md ${
+            isDark ? 'bg-gray-800/95' : 'bg-card/90'
+          }`}>
+            <BookOpen className={`w-16 h-16 mx-auto mb-4 ${isDark ? 'text-gray-500' : 'text-muted-foreground/50'}`} />
+            <h2 className={`text-2xl font-bold mb-2 ${isDark ? 'text-white' : 'text-foreground'}`}>
+              No hay frases para practicar
+            </h2>
+            <p className={`mb-6 ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>
+              Agrega algunas frases primero para poder practicar con flashcards.
+            </p>
+            <Button onClick={() => navigate('/phrases')}>
+              Ir a Mis Frases
+            </Button>
+          </div>
+        )}
+
+        {/* Ready State - Start screen */}
+        {sessionState === 'ready' && (
+          <div className={`text-center backdrop-blur rounded-3xl p-8 max-w-md ${
+            isDark ? 'bg-gray-800/95' : 'bg-card/90'
+          }`}>
+            {/* <div className="text-6xl mb-4">🎴</div> */}
+            <h2 className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-foreground'}`}>
+              ¡Tus Flash-Cards te esperan!
+            </h2>
+            <p className={`mb-2 ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>
+              Tienes {phrases.length} frases disponibles
+            </p>
+            
+            {/* Current streak indicator */}
+            <div className={`rounded-xl p-4 mb-6 flex items-center justify-center gap-3 ${
+              isDark ? 'bg-orange-500/20' : 'bg-orange-500/10'
+            }`}>
+              <span className="text-3xl">🔥</span>
+              <div className="text-left">
+                <p className={`text-2xl font-bold ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>{userStats.currentStreak} días</p>
+                <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Racha actual</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Button 
+                size="lg" 
+                className={`w-full h-14 text-lg ${isDark ? 'bg-purple-600 hover:bg-purple-700' : ''}`}
+                onClick={startPractice}
+              >
+                <Shuffle className="w-5 h-5 mr-2" />
+                Comenzar sesión
+              </Button>
+              <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-muted-foreground'}`}>
+                Practicarás hasta 10 frases aleatorias
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Practicing State */}
+        {sessionState === 'practicing' && currentPhrase && (
+          <FlashCardPractice
+            phrase={currentPhrase}
+            onAnswer={handleAnswer}
+            currentIndex={currentIndex}
+            totalCards={practiceQueue.length}
+            streak={sessionStreak}
+          />
+        )}
+
+        {/* Summary State */}
+        {sessionState === 'summary' && sessionResults && (
+          <SessionSummary
+            correctAnswers={correctAnswers}
+            totalQuestions={practiceQueue.length}
+            pointsEarned={sessionResults.pointsEarned}
+            currentStreak={userStats.currentStreak}
+            newAchievements={sessionResults.newAchievements}
+            onContinue={startPractice}
+            onGoHome={() => navigate('/dashboard')}
+          />
+        )}
       </main>
 
-      {/* Capybara Mascot */}
-      <div className="fixed bottom-0 left-0 w-80 h-100 pointer-events-none">
-        <img
-          src={cap2}
-          alt="Capybara mascot"
-          className="w-full h-full object-contain -scale-x-100"
-        />
-      </div>
+      {/* Capybara Mascot - only show when not practicing */}
+      {sessionState !== 'practicing' && sessionState !== 'summary' && (
+        <div className="fixed bottom-0 left-0 w-64 h-80 pointer-events-none z-10">
+          <img
+            src={cap2}
+            alt="Capybara mascot"
+            className="w-full h-full object-contain -scale-x-100"
+          />
+        </div>
+      )}
     </div>
   );
 };

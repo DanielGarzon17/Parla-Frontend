@@ -51,39 +51,43 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 280 50% 10%;
-    --foreground: 0 0% 98%;
+    --background: 270 30% 8%;
+    --foreground: 270 10% 95%;
 
-    --card: 280 40% 15%;
-    --card-foreground: 0 0% 98%;
+    --card: 270 25% 12%;
+    --card-foreground: 270 10% 95%;
 
-    --popover: 280 40% 15%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 270 25% 14%;
+    --popover-foreground: 270 10% 95%;
 
-    --primary: 270 50% 75%;
-    --primary-foreground: 280 50% 10%;
+    --primary: 270 60% 65%;
+    --primary-foreground: 270 30% 8%;
 
-    --secondary: 280 40% 20%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 270 30% 18%;
+    --secondary-foreground: 270 10% 90%;
 
-    --muted: 280 40% 20%;
-    --muted-foreground: 270 20% 65%;
+    --muted: 270 25% 16%;
+    --muted-foreground: 270 15% 55%;
 
-    --accent: 48 100% 60%;
-    --accent-foreground: 280 50% 10%;
+    --accent: 48 100% 55%;
+    --accent-foreground: 270 30% 8%;
 
-    --success: 84 100% 65%;
-    --success-foreground: 280 50% 10%;
+    --success: 142 70% 45%;
+    --success-foreground: 0 0% 100%;
 
-    --destructive: 0 62.8% 40%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 70% 45%;
+    --destructive-foreground: 0 0% 100%;
 
-    --stat-bg: 0 0% 8%;
-    --stat-foreground: 0 0% 100%;
+    --stat-bg: 270 30% 15%;
+    --stat-foreground: 270 10% 95%;
 
-    --border: 280 40% 20%;
-    --input: 280 40% 20%;
-    --ring: 270 50% 75%;
+    --border: 270 25% 20%;
+    --input: 270 25% 15%;
+    --ring: 270 60% 65%;
+    
+    /* Dark mode sidebar */
+    --sidebar-bg: 270 30% 10%;
+    --sidebar-border: 270 25% 18%;
   }
 }
 
@@ -516,4 +520,31 @@ All colors MUST be HSL.
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+}
+
+/* Match Cards - Line drawing animation */
+@keyframes draw-line {
+  from {
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+  }
+  to {
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-draw-line {
+  animation: draw-line 0.5s ease-out forwards;
+}
+
+/* Shake animation for wrong answers */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
 }
