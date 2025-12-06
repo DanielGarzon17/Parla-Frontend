@@ -1,12 +1,14 @@
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/hooks/useTheme';
 import { useEffect } from 'react';
 import logo from '@/assets/logo.png';
 
 const Login = () => {
   const navigate = useNavigate();
   const { login, isAuthenticated } = useAuth();
+  const { isDark } = useTheme();
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -27,7 +29,11 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-purple-700 flex items-center justify-center p-8 relative overflow-hidden">
+    <div className={`min-h-screen flex items-center justify-center p-8 relative overflow-hidden transition-colors duration-300 ${
+      isDark 
+        ? 'bg-gradient-to-br from-gray-900 via-purple-900/50 to-gray-900' 
+        : 'bg-gradient-to-br from-purple-900 via-purple-800 to-purple-700'
+    }`}>
       {/* Background decorative elements */}
       <div className="absolute top-20 left-20 w-4 h-4 bg-white/20 rounded-full"></div>
       <div className="absolute top-60 right-32 w-6 h-6 bg-white/30 rounded-full"></div>

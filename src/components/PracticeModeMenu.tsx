@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { LogOut } from "lucide-react";
+import { LogOut, BookOpen } from "lucide-react";
 
 const PracticeModeMenu = () => {
   const navigate = useNavigate();
@@ -37,6 +37,15 @@ const PracticeModeMenu = () => {
         onClick={() => navigate("/match")}
       >
         Match cards
+      </button>
+
+      {/* Saved Phrases (HU06) */}
+      <button
+        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-xl transition font-semibold flex items-center justify-center gap-2"
+        onClick={() => navigate("/phrases")}
+      >
+        <BookOpen className="w-4 h-4" />
+        Mis Frases
       </button>
 
       {/* Progress Dashboard */}
