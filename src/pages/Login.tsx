@@ -7,7 +7,7 @@ import logo from '@/assets/logo.png';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, login: authLogin } = useAuth();
   const { isDark } = useTheme();
 
   // Redirect if already authenticated
@@ -49,6 +49,14 @@ const Login = () => {
         if (response.ok) {
           const data = await response.json();
           console.log('Login successful:', data);
+          // Set authentication state with user data from backend
+          authLogin({
+            id: data.user.id,
+            username: data.user.username,
+            email: data.user.email,
+            profile_picture: data.user.profile_picture,
+            credential: access_token,
+          });
           navigate('/dashboard');
         } else {
           const error = await response.json();

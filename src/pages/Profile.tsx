@@ -64,22 +64,6 @@ import { generateStatsShareText } from '@/services/shareService';
 import { LANGUAGE_NAMES, Language } from '@/types/phrases';
 import logo from '@/assets/logo.png';
 
-// Decode JWT to get user info
-const decodeJWT = (token: string) => {
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
-  } catch {
-    return null;
-  }
-};
 
 interface UserSettings {
   displayName: string;
@@ -94,19 +78,16 @@ interface UserSettings {
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout } = useAuth();
   const { isDark } = useTheme();
   const [stats, setStats] = useState(getUserStats());
   const [isEditing, setIsEditing] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   
-  // User info from Google
-  const userInfo = user?.credential ? decodeJWT(user.credential) : null;
-  
-  // Settings state
+  // Settings state - using user data directly from backend
   const [settings, setSettings] = useState<UserSettings>({
-    displayName: userInfo?.name || 'Usuario',
-    email: userInfo?.email || 'usuario@email.com',
+    displayName: user?.username || 'Usuario',
+    email: user?.email || 'usuario@email.com',
     nativeLanguage: 'es',
     learningLanguage: 'en',
     dailyGoal: 10,
@@ -122,24 +103,21 @@ const Profile = () => {
     setStats(getUserStats());
   }, []);
 
-  // Update settings from user info
+  // Update settings when user data changes
   useEffect(() => {
-    const name = userInfo?.name;
-    const email = userInfo?.email;
-    if (name || email) {
+    if (user) {
       setSettings(s => ({
         ...s,
-        displayName: name || s.displayName,
-        email: email || s.email,
+        displayName: user.username || s.displayName,
+        email: user.email || s.email,
       }));
       setEditedSettings(s => ({
         ...s,
-        displayName: name || s.displayName,
-        email: email || s.email,
+        displayName: user.username || s.displayName,
+        email: user.email || s.email,
       }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.credential]);
+  }, [user]);
 
   const accuracy = getAccuracy(stats);
   const unlockedAchievements = getUnlockedAchievementsCount(stats);
@@ -240,11 +218,12 @@ const Profile = () => {
               <div className="absolute -top-16 left-6">
                 <div className="relative">
                   <div className="w-32 h-32 rounded-full border-4 border-background overflow-hidden bg-card shadow-xl">
-                    {userInfo?.picture ? (
+                    {user?.profile_picture ? (
                       <img 
-                        src={userInfo.picture} 
+                        src={user.profile_picture} 
                         alt={settings.displayName}
                         className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
                       />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">

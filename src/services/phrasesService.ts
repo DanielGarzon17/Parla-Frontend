@@ -1,358 +1,527 @@
 // Service for managing saved phrases (HU06, HU07, HU15, HU16)
-// This service contains mock data and will be connected to the backend later
+// Connected to backend API at /api/phrases/phrases
 
-import { SavedPhrase, PhraseFilter, PhraseSort, Language, Difficulty, GrammaticalCategory } from '@/types/phrases';
+import { 
+  SavedPhrase, 
+  PhraseFilter, 
+  PhraseSort, 
+  Language, 
+  Difficulty, 
+  GrammaticalCategory,
+  ApiPhrase,
+  ApiPhraseCreateResponse,
+  ApiPhrasesResponse,
+  ApiError
+} from '@/types/phrases';
 
-// Mock data for development - Updated with language, difficulty (HU15), and wordType (HU16)
-const mockPhrases: SavedPhrase[] = [
-  {
-    id: '1',
-    phrase: 'Break a leg',
-    translation: 'Buena suerte',
-    context: 'Used to wish someone good luck, especially before a performance',
-    sourceUrl: 'https://example.com/idioms',
-    createdAt: new Date('2024-01-15'),
-    lastReviewedAt: new Date('2024-01-20'),
-    isFavorite: true,
-    isLearned: true,
-    category: 'Expresiones',
-    language: 'en',
-    difficulty: 'medium',
-    tags: ['idiom', 'luck'],
-    wordType: 'idiom',
-  },
-  {
-    id: '2',
-    phrase: 'It\'s raining cats and dogs',
-    translation: 'Está lloviendo a cántaros',
-    context: 'Used to describe very heavy rain',
-    createdAt: new Date('2024-01-18'),
-    isFavorite: false,
-    isLearned: false,
-    category: 'Expresiones',
-    language: 'en',
-    difficulty: 'easy',
-    tags: ['weather', 'idiom'],
-    wordType: 'idiom',
-  },
-  {
-    id: '3',
-    phrase: 'The early bird catches the worm',
-    translation: 'Al que madruga, Dios le ayuda',
-    context: 'Success comes to those who prepare well and put in effort',
-    createdAt: new Date('2024-01-20'),
-    isFavorite: true,
-    isLearned: false,
-    category: 'Expresiones',
-    language: 'en',
-    difficulty: 'medium',
-    tags: ['proverb', 'success'],
-    wordType: 'phrase',
-  },
-  {
-    id: '4',
-    phrase: 'Piece of cake',
-    translation: 'Pan comido',
-    context: 'Something very easy to do',
-    sourceUrl: 'https://example.com/expressions',
-    createdAt: new Date('2024-01-22'),
-    lastReviewedAt: new Date('2024-01-25'),
-    isFavorite: false,
-    isLearned: true,
-    category: 'Cotidiano',
-    language: 'en',
-    difficulty: 'easy',
-    tags: ['easy', 'idiom'],
-    wordType: 'idiom',
-  },
-  {
-    id: '5',
-    phrase: 'Once in a blue moon',
-    translation: 'De vez en cuando / Muy raramente',
-    context: 'Something that happens very rarely',
-    createdAt: new Date('2024-01-25'),
-    isFavorite: false,
-    isLearned: false,
-    category: 'Expresiones',
-    language: 'en',
-    difficulty: 'hard',
-    tags: ['time', 'idiom'],
-    wordType: 'adverb',
-  },
-  {
-    id: '6',
-    phrase: 'Hit the nail on the head',
-    translation: 'Dar en el clavo',
-    context: 'To describe exactly what is causing a situation or problem',
-    createdAt: new Date('2024-01-28'),
-    isFavorite: true,
-    isLearned: true,
-    category: 'Expresiones',
-    language: 'en',
-    difficulty: 'medium',
-    tags: ['accuracy', 'idiom'],
-    wordType: 'idiom',
-  },
-  {
-    id: '7',
-    phrase: 'Better late than never',
-    translation: 'Más vale tarde que nunca',
-    context: 'It is better to do something late than not do it at all',
-    createdAt: new Date('2024-02-01'),
-    isFavorite: false,
-    isLearned: false,
-    category: 'Expresiones',
-    language: 'en',
-    difficulty: 'easy',
-    tags: ['proverb', 'time'],
-    wordType: 'phrase',
-  },
-  {
-    id: '8',
-    phrase: 'Speak of the devil',
-    translation: 'Hablando del rey de Roma',
-    context: 'Said when a person appears just after being mentioned',
-    createdAt: new Date('2024-02-05'),
-    isFavorite: true,
-    isLearned: false,
-    category: 'Cotidiano',
-    language: 'en',
-    difficulty: 'medium',
-    tags: ['surprise', 'idiom'],
-    wordType: 'idiom',
-  },
-  {
-    id: '9',
-    phrase: 'To be on cloud nine',
-    translation: 'Estar en las nubes / Muy feliz',
-    context: 'To be extremely happy',
-    createdAt: new Date('2024-02-08'),
-    isFavorite: false,
-    isLearned: false,
-    category: 'Expresiones',
-    language: 'en',
-    difficulty: 'medium',
-    tags: ['happiness', 'idiom'],
-    wordType: 'idiom',
-  },
-  {
-    id: '10',
-    phrase: 'A penny for your thoughts',
-    translation: '¿En qué piensas?',
-    context: 'Used to ask someone what they are thinking about',
-    createdAt: new Date('2024-02-10'),
-    isFavorite: false,
-    isLearned: false,
-    category: 'Cotidiano',
-    language: 'en',
-    difficulty: 'hard',
-    tags: ['conversation', 'idiom'],
-    wordType: 'phrase',
-  },
-  {
-    id: '11',
-    phrase: 'Bonjour, comment allez-vous?',
-    translation: 'Buenos días, ¿cómo está usted?',
-    context: 'Formal greeting in French',
-    createdAt: new Date('2024-02-12'),
-    isFavorite: true,
-    isLearned: true,
-    category: 'Cotidiano',
-    language: 'fr',
-    difficulty: 'easy',
-    tags: ['greeting', 'formal'],
-    wordType: 'phrase',
-  },
-  {
-    id: '12',
-    phrase: 'Wie geht es Ihnen?',
-    translation: '¿Cómo está usted?',
-    context: 'Formal way to ask how someone is in German',
-    createdAt: new Date('2024-02-14'),
-    isFavorite: false,
-    isLearned: false,
-    category: 'Cotidiano',
-    language: 'de',
-    difficulty: 'easy',
-    tags: ['greeting', 'formal'],
-    wordType: 'phrase',
-  },
-  // HU16 - Additional words with grammatical categories
-  {
-    id: '13',
-    phrase: 'Run',
-    translation: 'Correr',
-    context: 'To move quickly on foot',
-    createdAt: new Date('2024-02-16'),
-    isFavorite: false,
-    isLearned: true,
-    category: 'Vocabulario',
-    language: 'en',
-    difficulty: 'easy',
-    tags: ['movement', 'action'],
-    wordType: 'verb',
-  },
-  {
-    id: '14',
-    phrase: 'Beautiful',
-    translation: 'Hermoso/a',
-    context: 'Pleasing to the senses or mind',
-    createdAt: new Date('2024-02-17'),
-    isFavorite: true,
-    isLearned: false,
-    category: 'Vocabulario',
-    language: 'en',
-    difficulty: 'easy',
-    tags: ['description', 'positive'],
-    wordType: 'adjective',
-  },
-  {
-    id: '15',
-    phrase: 'Quickly',
-    translation: 'Rápidamente',
-    context: 'In a fast manner',
-    createdAt: new Date('2024-02-18'),
-    isFavorite: false,
-    isLearned: false,
-    category: 'Vocabulario',
-    language: 'en',
-    difficulty: 'easy',
-    tags: ['speed', 'manner'],
-    wordType: 'adverb',
-  },
-  {
-    id: '16',
-    phrase: 'Happiness',
-    translation: 'Felicidad',
-    context: 'The state of being happy',
-    createdAt: new Date('2024-02-19'),
-    isFavorite: true,
-    isLearned: true,
-    category: 'Vocabulario',
-    language: 'en',
-    difficulty: 'medium',
-    tags: ['emotion', 'positive'],
-    wordType: 'noun',
-  },
-  {
-    id: '17',
-    phrase: 'Although',
-    translation: 'Aunque',
-    context: 'In spite of the fact that',
-    createdAt: new Date('2024-02-20'),
-    isFavorite: false,
-    isLearned: false,
-    category: 'Gramática',
-    language: 'en',
-    difficulty: 'medium',
-    tags: ['connector', 'contrast'],
-    wordType: 'conjunction',
-  },
-  {
-    id: '18',
-    phrase: 'Wow!',
-    translation: '¡Guau!',
-    context: 'Expression of surprise or admiration',
-    createdAt: new Date('2024-02-21'),
-    isFavorite: false,
-    isLearned: true,
-    category: 'Expresiones',
-    language: 'en',
-    difficulty: 'easy',
-    tags: ['emotion', 'exclamation'],
-    wordType: 'interjection',
-  },
-];
+// API Configuration
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const PHRASES_ENDPOINT = `${API_BASE_URL}/phrases/phrases/`;
 
-// Simulated API delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Language code to ID mapping (based on backend)
+export const LANGUAGE_CODE_TO_ID: Record<string, number> = {
+  'en': 1,
+  'es': 2,
+  'fr': 7,
+  'de': 3,
+  'it': 4,
+  'pt': 5,
+};
+
+// Language ID to code mapping (reverse)
+export const LANGUAGE_ID_TO_CODE: Record<number, string> = {
+  1: 'en',
+  2: 'es',
+  3: 'de',
+  4: 'it',
+  5: 'pt',
+  7: 'fr',
+};
 
 /**
- * Fetch all saved phrases
- * TODO: Replace with actual API call
+ * Get CSRF token from cookies
+ * Django sets this cookie and requires it for POST/PUT/PATCH/DELETE requests
+ */
+const getCsrfToken = (): string | null => {
+  const name = 'csrftoken';
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [cookieName, cookieValue] = cookie.trim().split('=');
+    if (cookieName === name) {
+      return cookieValue;
+    }
+  }
+  return null;
+};
+
+/**
+ * Ensure CSRF token is available by making a GET request first
+ * This is a workaround for when the backend doesn't send CSRF cookie on login
+ */
+const ensureCsrfToken = async (): Promise<void> => {
+  if (!getCsrfToken()) {
+    console.log('CSRF token not found, fetching...');
+    // Make a GET request to get the CSRF cookie
+    await fetch(PHRASES_ENDPOINT, {
+      method: 'GET',
+      credentials: 'include',
+    });
+  }
+};
+
+/**
+ * Get headers for API requests
+ * Authentication is handled via JWT cookie 'session' (credentials: 'include')
+ * CSRF token is required for POST/PUT/PATCH/DELETE requests
+ */
+const getAuthHeaders = (): HeadersInit => {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  
+  // Add CSRF token for Django (required for mutating requests)
+  const csrfToken = getCsrfToken();
+  if (csrfToken) {
+    headers['X-CSRFToken'] = csrfToken;
+  }
+  
+  return headers;
+};
+
+/**
+ * Custom error class for API errors
+ */
+export class PhrasesApiError extends Error {
+  status?: number;
+  details?: Record<string, unknown>;
+
+  constructor(message: string, status?: number, details?: Record<string, unknown>) {
+    super(message);
+    this.name = 'PhrasesApiError';
+    this.status = status;
+    this.details = details;
+  }
+}
+
+/**
+ * Map language code to Language type, with fallback
+ */
+const mapLanguageCode = (code: string): Language => {
+  const validCodes: Language[] = ['en', 'es', 'fr', 'de', 'it', 'pt'];
+  return validCodes.includes(code as Language) ? (code as Language) : 'en';
+};
+
+/**
+ * Infer difficulty based on phrase length (since backend doesn't provide it)
+ */
+const inferDifficulty = (phrase: string): Difficulty => {
+  const wordCount = phrase.split(/\s+/).length;
+  if (wordCount <= 2) return 'easy';
+  if (wordCount <= 5) return 'medium';
+  return 'hard';
+};
+
+/**
+ * Transform API phrase to SavedPhrase format
+ */
+const transformApiPhrase = (apiPhrase: ApiPhrase): SavedPhrase => {
+  return {
+    id: apiPhrase.id.toString(),
+    phrase: apiPhrase.original_text,
+    translation: apiPhrase.translated_text,
+    context: apiPhrase.source_type ? `Source: ${apiPhrase.source_type}` : undefined,
+    sourceUrl: undefined,
+    createdAt: new Date(apiPhrase.created_at),
+    lastReviewedAt: undefined,
+    isFavorite: false, // Backend doesn't provide this yet
+    isLearned: false,  // Backend doesn't provide this yet
+    category: apiPhrase.source_type || 'Vocabulario',
+    language: mapLanguageCode(apiPhrase.source_language.code),
+    difficulty: inferDifficulty(apiPhrase.original_text),
+    tags: [apiPhrase.source_language.name, apiPhrase.target_language.name],
+    wordType: 'phrase', // Default, backend doesn't provide this yet
+  };
+};
+
+/**
+ * Handle API response and throw appropriate errors
+ */
+const handleApiResponse = async <T>(response: Response): Promise<T> => {
+  // Debug: log response status
+  console.log(`API Response: ${response.status} ${response.statusText}`, response.url);
+  
+  if (!response.ok) {
+    let errorMessage = `Error ${response.status}: ${response.statusText}`;
+    let details: Record<string, unknown> | undefined;
+
+    try {
+      const errorData = await response.json();
+      console.error('API Error details:', errorData);
+      errorMessage = errorData.message || errorData.detail || errorMessage;
+      details = errorData;
+    } catch {
+      // Response body is not JSON, try to get text
+      try {
+        const textError = await response.text();
+        console.error('API Error text:', textError);
+        errorMessage = textError || errorMessage;
+      } catch {
+        // Ignore
+      }
+    }
+
+    throw new PhrasesApiError(errorMessage, response.status, details);
+  }
+
+  return response.json();
+};
+
+/**
+ * Fetch all saved phrases from the backend API
  */
 export const fetchPhrases = async (): Promise<SavedPhrase[]> => {
-  await delay(500); // Simulate network delay
-  return [...mockPhrases];
+  try {
+    const response = await fetch(PHRASES_ENDPOINT, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
+
+    const data = await handleApiResponse<ApiPhrasesResponse>(response);
+    
+    // Transform API response to SavedPhrase format
+    return data.results.map(transformApiPhrase);
+  } catch (error) {
+    if (error instanceof PhrasesApiError) {
+      throw error;
+    }
+    
+    // Network or other errors
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new PhrasesApiError(
+        'No se pudo conectar con el servidor. Verifica tu conexión a internet.',
+        0
+      );
+    }
+    
+    throw new PhrasesApiError(
+      error instanceof Error ? error.message : 'Error desconocido al obtener las frases',
+      undefined
+    );
+  }
 };
 
 /**
- * Get a single phrase by ID
- * TODO: Replace with actual API call
+ * Fetch phrases with pagination support
+ */
+export const fetchPhrasesWithPagination = async (url?: string): Promise<{
+  phrases: SavedPhrase[];
+  count: number;
+  next: string | null;
+  previous: string | null;
+}> => {
+  try {
+    const endpoint = url || PHRASES_ENDPOINT;
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
+
+    const data = await handleApiResponse<ApiPhrasesResponse>(response);
+    
+    return {
+      phrases: data.results.map(transformApiPhrase),
+      count: data.count,
+      next: data.next,
+      previous: data.previous,
+    };
+  } catch (error) {
+    if (error instanceof PhrasesApiError) {
+      throw error;
+    }
+    
+    throw new PhrasesApiError(
+      error instanceof Error ? error.message : 'Error desconocido al obtener las frases',
+      undefined
+    );
+  }
+};
+
+/**
+ * Get a single phrase by ID from the API
  */
 export const getPhraseById = async (id: string): Promise<SavedPhrase | null> => {
-  await delay(200);
-  return mockPhrases.find(p => p.id === id) || null;
+  try {
+    const response = await fetch(`${PHRASES_ENDPOINT}${id}/`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    const data = await handleApiResponse<ApiPhrase>(response);
+    return transformApiPhrase(data);
+  } catch (error) {
+    if (error instanceof PhrasesApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 };
 
 /**
- * Add a new phrase
- * TODO: Replace with actual API call
+ * Create phrase request body interface
  */
-export const addPhrase = async (phrase: Omit<SavedPhrase, 'id' | 'createdAt'>): Promise<SavedPhrase> => {
-  await delay(300);
-  const newPhrase: SavedPhrase = {
-    ...phrase,
-    id: Date.now().toString(),
-    createdAt: new Date(),
-  };
-  mockPhrases.push(newPhrase);
-  return newPhrase;
+interface CreatePhraseRequest {
+  original_text: string;
+  translated_text: string;
+  source_language: number;
+  target_language: number;
+}
+
+/**
+ * Result of creating a phrase, includes both the SavedPhrase and the numeric ID
+ */
+export interface CreatePhraseResult {
+  phrase: SavedPhrase;
+  phraseId: number; // Numeric ID from backend, needed for creating flashcards
+}
+
+/**
+ * Create a new phrase with raw parameters
+ * POST /api/phrases/phrases/
+ * 
+ * IMPORTANT: Backend PhraseCreateSerializer does NOT return 'id' in response.
+ * We need to fetch the phrases list to get the newly created phrase with its ID.
+ * 
+ * @param originalText - The original text/phrase
+ * @param translatedText - The translated text
+ * @param sourceLanguageId - Source language ID (1=en, 2=es, 3=de, 4=it, 5=pt, 7=fr)
+ * @param targetLanguageId - Target language ID
+ * @returns CreatePhraseResult with both SavedPhrase and numeric phraseId
+ */
+export const createPhrase = async (
+  originalText: string,
+  translatedText: string,
+  sourceLanguageId: number = 1,
+  targetLanguageId: number = 2
+): Promise<CreatePhraseResult> => {
+  try {
+    // Ensure CSRF token is available before making POST request
+    await ensureCsrfToken();
+    
+    const requestBody: CreatePhraseRequest = {
+      original_text: originalText,
+      translated_text: translatedText,
+      source_language: sourceLanguageId,
+      target_language: targetLanguageId,
+    };
+
+    const response = await fetch(PHRASES_ENDPOINT, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+      body: JSON.stringify(requestBody),
+    });
+
+    // Backend PhraseCreateSerializer returns the created phrase but WITHOUT id
+    const createData = await handleApiResponse<ApiPhraseCreateResponse>(response);
+    
+    console.log('Create phrase response:', createData);
+    
+    // Since backend doesn't return ID, we need to fetch the latest phrase
+    // The list is ordered by -created_at, so the first one should be our new phrase
+    const listResponse = await fetch(`${PHRASES_ENDPOINT}?ordering=-created_at&page_size=1`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
+    
+    const listData = await handleApiResponse<ApiPhrasesResponse>(listResponse);
+    
+    // Find the phrase we just created by matching text
+    const createdPhrase = listData.results.find(
+      p => p.original_text === originalText && p.translated_text === translatedText
+    );
+    
+    if (!createdPhrase) {
+      console.warn('Could not find created phrase in list, using temporary ID');
+      // Fallback: create a temporary SavedPhrase without real ID
+      const sourceLanguageCode = LANGUAGE_ID_TO_CODE[sourceLanguageId] || 'en';
+      const savedPhrase: SavedPhrase = {
+        id: `temp-${Date.now()}`,
+        phrase: originalText,
+        translation: translatedText,
+        context: createData.context || undefined,
+        sourceUrl: createData.source_url || undefined,
+        createdAt: new Date(),
+        isFavorite: false,
+        isLearned: false,
+        category: createData.source_type || 'Vocabulario',
+        language: mapLanguageCode(sourceLanguageCode),
+        difficulty: inferDifficulty(originalText),
+        tags: [],
+        wordType: 'phrase',
+      };
+      
+      return {
+        phrase: savedPhrase,
+        phraseId: 0, // No real ID available
+      };
+    }
+    
+    // Transform the found phrase to SavedPhrase format
+    const savedPhrase = transformApiPhrase(createdPhrase);
+    
+    return {
+      phrase: savedPhrase,
+      phraseId: createdPhrase.id,
+    };
+  } catch (error) {
+    if (error instanceof PhrasesApiError) {
+      throw error;
+    }
+    throw new PhrasesApiError(
+      error instanceof Error ? error.message : 'Error al crear la frase',
+      undefined
+    );
+  }
 };
 
 /**
- * Update an existing phrase
- * TODO: Replace with actual API call
+ * Add a new phrase via API (using SavedPhrase format)
+ * POST /api/phrases/phrases/
+ * Body: { original_text, translated_text, source_language (id), target_language (id) }
+ * @returns CreatePhraseResult with both SavedPhrase and numeric phraseId
+ */
+export const addPhrase = async (phrase: Omit<SavedPhrase, 'id' | 'createdAt'>): Promise<CreatePhraseResult> => {
+  // Get language IDs from codes
+  const sourceLanguageId = LANGUAGE_CODE_TO_ID[phrase.language] || 1; // Default to English
+  const targetLanguageId = 2; // Default to Spanish (es) as target
+  
+  return createPhrase(
+    phrase.phrase,
+    phrase.translation,
+    sourceLanguageId,
+    targetLanguageId
+  );
+};
+
+/**
+ * Update an existing phrase via API
+ * PATCH /api/phrases/phrases/{id}/
  */
 export const updatePhrase = async (id: string, updates: Partial<SavedPhrase>): Promise<SavedPhrase | null> => {
-  await delay(300);
-  const index = mockPhrases.findIndex(p => p.id === id);
-  if (index === -1) return null;
-  
-  mockPhrases[index] = { ...mockPhrases[index], ...updates };
-  return mockPhrases[index];
+  try {
+    // Ensure CSRF token is available before making PATCH request
+    await ensureCsrfToken();
+    
+    // Build update body - only include fields that are provided
+    const updateBody: Partial<CreatePhraseRequest> = {};
+    if (updates.phrase) updateBody.original_text = updates.phrase;
+    if (updates.translation) updateBody.translated_text = updates.translation;
+    if (updates.language) updateBody.source_language = LANGUAGE_CODE_TO_ID[updates.language] || 1;
+
+    const response = await fetch(`${PHRASES_ENDPOINT}${id}/`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+      body: JSON.stringify(updateBody),
+    });
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    const data = await handleApiResponse<ApiPhrase>(response);
+    return transformApiPhrase(data);
+  } catch (error) {
+    if (error instanceof PhrasesApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 };
 
 /**
- * Delete a phrase
- * TODO: Replace with actual API call
+ * Delete a phrase via API
+ * DELETE /api/phrases/phrases/{id}/
  */
 export const deletePhrase = async (id: string): Promise<boolean> => {
-  await delay(300);
-  const index = mockPhrases.findIndex(p => p.id === id);
-  if (index === -1) return false;
-  
-  mockPhrases.splice(index, 1);
-  return true;
+  try {
+    // Ensure CSRF token is available before making DELETE request
+    await ensureCsrfToken();
+    
+    const response = await fetch(`${PHRASES_ENDPOINT}${id}/`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
+
+    if (response.status === 404) {
+      return false;
+    }
+
+    if (response.status === 204 || response.ok) {
+      return true;
+    }
+
+    await handleApiResponse(response);
+    return true;
+  } catch (error) {
+    if (error instanceof PhrasesApiError && error.status === 404) {
+      return false;
+    }
+    throw error;
+  }
 };
+
+// Local state for favorite/learned status (until backend supports it)
+const localPhraseState: Map<string, { isFavorite: boolean; isLearned: boolean; lastReviewedAt?: Date }> = new Map();
 
 /**
  * Toggle favorite status
- * TODO: Replace with actual API call
+ * Note: Currently stored locally until backend supports this feature
  */
 export const toggleFavorite = async (id: string): Promise<SavedPhrase | null> => {
-  await delay(200);
-  const phrase = mockPhrases.find(p => p.id === id);
-  if (!phrase) return null;
-  
-  phrase.isFavorite = !phrase.isFavorite;
-  return phrase;
+  try {
+    const phrase = await getPhraseById(id);
+    if (!phrase) return null;
+    
+    const currentState = localPhraseState.get(id) || { isFavorite: false, isLearned: false };
+    currentState.isFavorite = !currentState.isFavorite;
+    localPhraseState.set(id, currentState);
+    
+    return { ...phrase, ...currentState };
+  } catch {
+    return null;
+  }
 };
 
 /**
  * Toggle learned status
- * TODO: Replace with actual API call
+ * Note: Currently stored locally until backend supports this feature
  */
 export const toggleLearned = async (id: string): Promise<SavedPhrase | null> => {
-  await delay(200);
-  const phrase = mockPhrases.find(p => p.id === id);
-  if (!phrase) return null;
-  
-  phrase.isLearned = !phrase.isLearned;
-  if (phrase.isLearned) {
-    phrase.lastReviewedAt = new Date();
+  try {
+    const phrase = await getPhraseById(id);
+    if (!phrase) return null;
+    
+    const currentState = localPhraseState.get(id) || { isFavorite: false, isLearned: false };
+    currentState.isLearned = !currentState.isLearned;
+    if (currentState.isLearned) {
+      currentState.lastReviewedAt = new Date();
+    }
+    localPhraseState.set(id, currentState);
+    
+    return { ...phrase, ...currentState };
+  } catch {
+    return null;
   }
-  return phrase;
 };
 
 /**
