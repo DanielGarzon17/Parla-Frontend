@@ -99,14 +99,13 @@ const Profile = () => {
   const [stats, setStats] = useState(getUserStats());
   const [isEditing, setIsEditing] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-  
-  // User info from Google
-  const userInfo = user?.credential ? decodeJWT(user.credential) : null;
+  const [isLoading, setIsLoading] = useState(true);
+  const [profileData, setProfileData] = useState<any>(null);
   
   // Settings state
   const [settings, setSettings] = useState<UserSettings>({
-    displayName: userInfo?.name || 'Usuario',
-    email: userInfo?.email || 'usuario@email.com',
+    displayName: '',
+    email: '',
     nativeLanguage: 'es',
     learningLanguage: 'en',
     dailyGoal: 10,
@@ -117,37 +116,75 @@ const Profile = () => {
 
   const [editedSettings, setEditedSettings] = useState<UserSettings>(settings);
 
+  // Cargar datos del usuario desde el backend
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/users/profile/`, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setProfileData(data);
+          // Actualizar settings con datos del backend
+          setSettings(s => ({
+            ...s,
+            displayName: data.first_name && data.last_name ? `${data.first_name} ${data.last_name}` : data.email,
+            email: data.email,
+            // Los idiomas y otras preferencias vendrían del backend si están disponibles
+            nativeLanguage: data.native_language || 'es',
+            learningLanguage: data.learning_language || 'en',
+            dailyGoal: data.daily_goal || 10,
+          }));
+          setEditedSettings(s => ({
+            ...s,
+            displayName: data.first_name && data.last_name ? `${data.first_name} ${data.last_name}` : data.email,
+            email: data.email,
+            nativeLanguage: data.native_language || 'es',
+            learningLanguage: data.learning_language || 'en',
+            dailyGoal: data.daily_goal || 10,
+          }));
+        }
+      } catch (err) {
+        console.error('Error fetching user profile:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
+
   // Refresh stats
   useEffect(() => {
     setStats(getUserStats());
   }, []);
 
-  // Update settings from user info
-  useEffect(() => {
-    const name = userInfo?.name;
-    const email = userInfo?.email;
-    if (name || email) {
-      setSettings(s => ({
-        ...s,
-        displayName: name || s.displayName,
-        email: email || s.email,
-      }));
-      setEditedSettings(s => ({
-        ...s,
-        displayName: name || s.displayName,
-        email: email || s.email,
-      }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.credential]);
-
   const accuracy = getAccuracy(stats);
   const unlockedAchievements = getUnlockedAchievementsCount(stats);
 
-  const handleSaveSettings = () => {
+  const handleSaveSettings = async () => {
     setSettings(editedSettings);
     setIsEditing(false);
-    // TODO: Save to backend
+    // Guardar cambios en el backend
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/users/profile/`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          native_language: editedSettings.nativeLanguage,
+          learning_language: editedSettings.learningLanguage,
+          daily_goal: editedSettings.dailyGoal,
+        }),
+      });
+      if (!response.ok) {
+        console.error('Error saving settings');
+      }
+    } catch (err) {
+      console.error('Error saving settings:', err);
+    }
   };
 
   const handleCancelEdit = () => {
@@ -206,6 +243,23 @@ const Profile = () => {
     },
   ];
 
+  if (isLoading) {
+    return (
+      <div className={`min-h-screen relative overflow-hidden transition-colors duration-300 ${
+        isDark 
+          ? 'bg-gradient-to-br from-gray-900 via-pink-900/10 to-gray-900' 
+          : 'bg-gradient-to-br from-purple-100 via-pink-50 to-orange-50'
+      }`}>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-foreground">Cargando perfil...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen relative overflow-hidden transition-colors duration-300 ${
       isDark 
@@ -240,9 +294,9 @@ const Profile = () => {
               <div className="absolute -top-16 left-6">
                 <div className="relative">
                   <div className="w-32 h-32 rounded-full border-4 border-background overflow-hidden bg-card shadow-xl">
-                    {userInfo?.picture ? (
+                    {profileData?.profile_picture ? (
                       <img 
-                        src={userInfo.picture} 
+                        src={profileData.profile_picture} 
                         alt={settings.displayName}
                         className="w-full h-full object-cover"
                       />

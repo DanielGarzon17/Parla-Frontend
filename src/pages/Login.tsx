@@ -2,22 +2,39 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import logo from '@/assets/logo.png';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { login: setUserAuth } = useAuth();
   const { isDark } = useTheme();
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
 
-  // Redirect if already authenticated
+  // Al cargar, verificar si existe sesión en el backend
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/dashboard');
-    }
-  }, [isAuthenticated, navigate]);
+    const checkSession = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/users/profile/`, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          // Usuario tiene sesión activa, guardar y redirigir
+          setUserAuth(data);
+          navigate('/dashboard');
+        }
+      } catch (err) {
+        console.error('Error checking session:', err);
+      } finally {
+        setIsCheckingSession(false);
+      }
+    };
+    checkSession();
+  }, [navigate, setUserAuth]);
 
-  const login = useGoogleLogin({
+  const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       // tokenResponse.access_token -> token de acceso de Google
       const { access_token } = tokenResponse;
@@ -49,6 +66,15 @@ const Login = () => {
         if (response.ok) {
           const data = await response.json();
           console.log('Login successful:', data);
+          // Consultar perfil para obtener datos actualizados
+          const profileResponse = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/users/profile/`, {
+            method: 'GET',
+            credentials: 'include',
+          });
+          if (profileResponse.ok) {
+            const profileData = await profileResponse.json();
+            setUserAuth(profileData);
+          }
           navigate('/dashboard');
         } else {
           const error = await response.json();
@@ -60,6 +86,21 @@ const Login = () => {
     },
     onError: (err) => console.error(err),
   });
+
+  if (isCheckingSession) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center p-8 relative overflow-hidden transition-colors duration-300 ${
+        isDark 
+          ? 'bg-gradient-to-br from-gray-900 via-purple-900/50 to-gray-900' 
+          : 'bg-gradient-to-br from-purple-900 via-purple-800 to-purple-700'
+      }`}>
+        <div className="text-white text-center">
+          <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p>Verificando sesión...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen flex items-center justify-center p-8 relative overflow-hidden transition-colors duration-300 ${
@@ -97,7 +138,7 @@ const Login = () => {
         <div className="mt-12">
           <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all duration-300">
             <button 
-              onClick={() => login()}
+              onClick={() => googleLogin()}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
