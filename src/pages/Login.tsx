@@ -7,7 +7,7 @@ import logo from '@/assets/logo.png';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login: setUserAuth } = useAuth();
+  const { isAuthenticated, login: authLogin } = useAuth();
   const { isDark } = useTheme();
   const [isCheckingSession, setIsCheckingSession] = useState(true);
 
