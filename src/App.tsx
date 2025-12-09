@@ -7,6 +7,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from "./contexts/AuthProvider";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { StreakProvider } from "./contexts/StreakContext";
+import { PointsProvider } from "./contexts/PointsContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import ThemeToggle from "./components/ThemeToggle";
@@ -31,6 +32,7 @@ const App = () => (
       <ThemeProvider>
         <AuthProvider>
           <StreakProvider>
+          <PointsProvider>
             <TooltipProvider>
             <Toaster />
             <Sonner />
@@ -98,6 +100,7 @@ const App = () => (
               </Routes>
             </BrowserRouter>
             </TooltipProvider>
+          </PointsProvider>
           </StreakProvider>
         </AuthProvider>
       </ThemeProvider>

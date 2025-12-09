@@ -18,6 +18,7 @@ import {
   ApiError
 } from "@/services/gamificationApi";
 import { useStreak } from "@/contexts/StreakContext";
+import { usePoints } from "@/contexts/PointsContext";
 import confetti from "canvas-confetti";
 import logo from "@/assets/logo.png";
 
@@ -43,6 +44,7 @@ export const MatchCards = () => {
   const navigate = useNavigate();
   const { isDark } = useTheme();
   const { recordPractice } = useStreak();
+  const { addPoints } = usePoints();
   const containerRef = useRef<HTMLDivElement>(null);
   
   // Game state
@@ -64,6 +66,8 @@ export const MatchCards = () => {
   const [isSavingResults, setIsSavingResults] = useState(false);
   // Store all match attempts for sending to backend at the end
   const [matchAttempts, setMatchAttempts] = useState<Array<{ left_id: number; right_id: number }>>([]);
+  // Ref to prevent duplicate game completion calls
+  const hasCompletedRef = useRef<boolean>(false);
 
   // Prepare and start game - calls backend API
   const prepareGame = async () => {
@@ -79,6 +83,7 @@ export const MatchCards = () => {
     setWrongPair(null);
     setErrorMessage(null);
     setMatchAttempts([]);
+    hasCompletedRef.current = false; // Reset for new game
 
     try {
       const response = await startMatchingSession(CARDS_PER_GAME);
@@ -199,6 +204,10 @@ export const MatchCards = () => {
 
   // Handle game completion - sends all results to backend at once
   const handleGameComplete = async () => {
+    // Prevent duplicate calls
+    if (hasCompletedRef.current) return;
+    hasCompletedRef.current = true;
+    
     playComplete();
     setIsSavingResults(true);
     
@@ -211,6 +220,10 @@ export const MatchCards = () => {
         setSession(response.session);
         // Record activity to update streak
         await recordPractice();
+        // Send points to backend (score is the total points earned)
+        if (score > 0) {
+          addPoints(score).catch(err => console.error('Error adding points:', err));
+        }
       } catch (error) {
         console.error('Error finishing session:', error);
       }

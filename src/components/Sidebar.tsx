@@ -25,6 +25,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { getUserStats } from '@/services/gamificationService';
 import { useTheme } from '@/hooks/useTheme';
+import { usePoints } from '@/contexts/PointsContext';
+import { useStreak } from '@/contexts/StreakContext';
 import logo from '@/assets/logo.png';
 
 interface SidebarProps {
@@ -77,9 +79,15 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
   const location = useLocation();
   const { logout, user } = useAuth();
   const { isDark } = useTheme();
+  const { totalPoints } = usePoints();
+  const { streak } = useStreak();
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [stats, setStats] = useState(getUserStats());
+
+  // Use backend values with fallback to local stats
+  const displayPoints = totalPoints || stats.totalPoints;
+  const displayStreak = streak || stats.currentStreak;
 
   // Refresh stats when sidebar opens
   useEffect(() => {
@@ -145,11 +153,11 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
         <div className="flex items-center justify-center gap-3 mt-3 w-full">
           <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full ${isDark ? 'bg-orange-500/30' : 'bg-orange-500/20'}`}>
             <Flame className="w-3.5 h-3.5 text-orange-500" />
-            <span className={`text-xs font-bold ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>{stats.currentStreak}</span>
+            <span className={`text-xs font-bold ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>{displayStreak}</span>
           </div>
           <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full ${isDark ? 'bg-purple-500/30' : 'bg-purple-500/20'}`}>
             <Trophy className={`w-3.5 h-3.5 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
-            <span className={`text-xs font-bold ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>{stats.totalPoints}</span>
+            <span className={`text-xs font-bold ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>{displayPoints.toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -253,11 +261,11 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
             <div className="flex items-center justify-center gap-3 mt-3 w-full">
               <div className="flex items-center gap-1 bg-orange-500/20 px-2.5 py-1 rounded-full">
                 <Flame className="w-3.5 h-3.5 text-orange-500" />
-                <span className="text-xs font-bold text-orange-600">{stats.currentStreak}</span>
+                <span className="text-xs font-bold text-orange-600">{displayStreak}</span>
               </div>
               <div className="flex items-center gap-1 bg-purple-500/20 px-2.5 py-1 rounded-full">
                 <Trophy className="w-3.5 h-3.5 text-purple-500" />
-                <span className="text-xs font-bold text-purple-600">{stats.totalPoints}</span>
+                <span className="text-xs font-bold text-purple-600">{displayPoints.toLocaleString()}</span>
               </div>
             </div>
           </>
@@ -267,7 +275,11 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
           <div className="flex flex-col items-center gap-1 mt-2">
             <div className="flex items-center gap-1 bg-orange-500/20 px-2 py-1 rounded-full">
               <Flame className="w-3 h-3 text-orange-500" />
-              <span className="text-xs font-bold text-orange-600">{stats.currentStreak}</span>
+              <span className="text-xs font-bold text-orange-600">{displayStreak}</span>
+            </div>
+            <div className="flex items-center gap-1 bg-purple-500/20 px-2 py-1 rounded-full">
+              <Trophy className="w-3 h-3 text-purple-500" />
+              <span className="text-xs font-bold text-purple-600">{displayPoints.toLocaleString()}</span>
             </div>
           </div>
         )}

@@ -329,4 +329,49 @@ export const recordActivity = async (): Promise<StreakData> => {
   return apiPost<StreakData>('/gamification/activity/', {});
 };
 
+// ============================================
+// ACHIEVEMENTS API - /api/gamification/achievements/
+// ============================================
+
+export interface UserAchievement {
+  id: number;
+  achievement_type: string;
+  achievement_name: string;
+  achieved_at: string;
+}
+
+/**
+ * Get all achievements unlocked by the user
+ * GET /api/gamification/achievements/
+ */
+export const getAchievements = async (): Promise<UserAchievement[]> => {
+  return apiGet<UserAchievement[]>('/gamification/achievements/');
+};
+
+// ============================================
+// POINTS API - /api/gamification/points/
+// ============================================
+
+export interface PointsData {
+  total_points: number;
+}
+
+/**
+ * Get user's total points
+ * GET /api/gamification/points/
+ */
+export const getPoints = async (): Promise<PointsData> => {
+  return apiGet<PointsData>('/gamification/points/');
+};
+
+/**
+ * Add points after completing a game
+ * POST /api/gamification/points/add/
+ * @param amount - Total points to add from the current game
+ * @returns Updated total points
+ */
+export const addPoints = async (amount: number): Promise<PointsData> => {
+  return apiPost<PointsData>('/gamification/points/add/', { amount });
+};
+
 export { ApiError };

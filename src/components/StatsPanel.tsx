@@ -7,11 +7,13 @@ import { useTheme } from '@/hooks/useTheme';
 import { getUserStats, getAccuracy, getUnlockedAchievementsCount } from '@/services/gamificationService';
 import { fetchUserGameStats, UserGameStats } from '@/services/gamificationApi';
 import { useStreak } from '@/contexts/StreakContext';
+import { usePoints } from '@/contexts/PointsContext';
 import cap3 from "@/assets/cap3.png";
 
 const StatsPanel = () => {
   const { isDark } = useTheme();
-  const { streak, bestStreak, isLoading: isStreakLoading } = useStreak();
+  const { streak, bestStreak } = useStreak();
+  const { totalPoints: backendPoints } = usePoints();
   const [localStats, setLocalStats] = useState(getUserStats());
   const [backendStats, setBackendStats] = useState<UserGameStats | null>(null);
   const [isStreakAnimating, setIsStreakAnimating] = useState(false);
@@ -50,7 +52,7 @@ const StatsPanel = () => {
   }, [streak]);
 
   // Use backend stats when available, fallback to local
-  const totalPoints = backendStats?.totalPoints || stats.totalPoints;
+  const totalPoints = backendPoints || backendStats?.totalPoints || stats.totalPoints;
   const totalPhrasesPracticed = backendStats?.totalPhrasesPracticed || stats.totalPhrasesPracticed;
   const accuracy = backendStats?.accuracy || getAccuracy(stats);
   const unlockedAchievements = getUnlockedAchievementsCount(stats);

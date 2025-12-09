@@ -1,40 +1,44 @@
 // Progress Page with dynamic stats and achievements (HU10.4, HU10.5, HU17)
 // Connected to backend API for real stats
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Flame, Trophy, Target, Calendar, TrendingUp, Star, Loader2, Award } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import ParticlesBackground from '@/components/ParticlesBackground';
 import ShareButton from '@/components/ShareButton';
 import { useTheme } from '@/hooks/useTheme';
-import { getUserStats, getAccuracy, getUnlockedAchievementsCount } from '@/services/gamificationService';
-import { fetchUserGameStats, UserGameStats, getPracticeSessions, PracticeSession } from '@/services/gamificationApi';
+import { getUserStats, getAccuracy } from '@/services/gamificationService';
+import { fetchUserGameStats, UserGameStats, getAchievements, getPoints, UserAchievement } from '@/services/gamificationApi';
 import { useStreak } from '@/contexts/StreakContext';
 import { generateStatsShareText } from '@/services/shareService';
-import { Achievement } from '@/types/gamification';
 
 const Progress = () => {
-  const navigate = useNavigate();
   const { isDark } = useTheme();
-  const { streak, bestStreak, isLoading: isStreakLoading } = useStreak();
+  const { streak, bestStreak } = useStreak();
   const [localStats, setLocalStats] = useState(getUserStats());
   const [backendStats, setBackendStats] = useState<UserGameStats | null>(null);
-  const [recentSessions, setRecentSessions] = useState<PracticeSession[]>([]);
+  const [achievements, setAchievements] = useState<UserAchievement[]>([]);
+  const [totalPoints, setTotalPoints] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedTab, setSelectedTab] = useState<'stats' | 'achievements'>('stats');
+  const hasLoadedRef = useRef<boolean>(false);
 
-  // Fetch stats from backend on mount
+  // Fetch stats from backend on mount - SINGLE API CALL
   useEffect(() => {
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
+    
     const loadStats = async () => {
       setIsLoading(true);
       try {
-        const [gameStats, sessions] = await Promise.all([
+        // Load all data in parallel - single call per endpoint
+        const [gameStats, achievementsData, pointsData] = await Promise.all([
           fetchUserGameStats(),
-          getPracticeSessions()
+          getAchievements(),
+          getPoints()
         ]);
         setBackendStats(gameStats);
-        setRecentSessions(sessions.slice(0, 10));
+        setAchievements(achievementsData);
+        setTotalPoints(pointsData.total_points);
       } catch (error) {
         console.error('Error loading stats from backend:', error);
       } finally {
@@ -50,13 +54,11 @@ const Progress = () => {
   const stats = localStats;
 
   const accuracy = backendStats?.accuracy || getAccuracy(stats);
-  const unlockedCount = getUnlockedAchievementsCount(stats);
 
   // Use backend stats when available
-  const totalPoints = backendStats?.totalPoints || stats.totalPoints;
+  const displayPoints = totalPoints || backendStats?.totalPoints || stats.totalPoints;
   const totalPhrasesPracticed = backendStats?.totalPhrasesPracticed || stats.totalPhrasesPracticed;
   const totalSessions = backendStats?.totalSessions || stats.totalSessionsCompleted;
-  const sessionsByType = backendStats?.sessionsByType || { flashcard: 0, timed: 0, matching: 0, quiz: 0 };
 
   // Prepare chart data from weekly progress
   const chartData = stats.weeklyProgress.map(day => ({
@@ -168,7 +170,7 @@ const Progress = () => {
                 {/* Points */}
                 <div className="bg-gradient-to-br from-purple-500 to-indigo-600 text-white rounded-2xl p-4 text-center shadow-lg">
                   <Trophy className="w-8 h-8 mx-auto mb-2" />
-                  <p className="text-2xl font-bold">{isLoading ? '...' : totalPoints.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{isLoading ? '...' : displayPoints.toLocaleString()}</p>
                   <p className="text-xs opacity-80">Puntos</p>
                 </div>
 
@@ -265,15 +267,31 @@ const Progress = () => {
             {/* Right Section - Achievements */}
             <div className="lg:col-span-3">
               <div className="bg-card/90 backdrop-blur rounded-2xl p-6 shadow-lg">
-                <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
-                  🏆 Logros
-                </h2>
-                
-                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-                  {stats.achievements.map((achievement) => (
-                    <AchievementCard key={achievement.id} achievement={achievement} />
-                  ))}
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                    🏆 Logros
+                  </h2>
+                  <span className="text-sm text-muted-foreground bg-primary/10 px-2 py-1 rounded-full">
+                    {achievements.length} desbloqueados
+                  </span>
                 </div>
+                
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  </div>
+                ) : achievements.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Trophy className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                    <p className="text-muted-foreground">¡Sigue practicando para desbloquear logros!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                    {achievements.map((achievement) => (
+                      <BackendAchievementCard key={achievement.id} achievement={achievement} />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -283,49 +301,61 @@ const Progress = () => {
   );
 };
 
-// Achievement Card Component
-const AchievementCard = ({ achievement }: { achievement: Achievement }) => {
-  const isUnlocked = achievement.unlockedAt !== null;
+// Achievement configuration for icons and colors
+const ACHIEVEMENT_CONFIG: Record<string, { icon: string; color: string; gradient: string }> = {
+  // Streak achievements
+  streak_7: { icon: '🔥', color: 'text-orange-500', gradient: 'from-orange-500/20 to-red-500/20' },
+  streak_30: { icon: '🔥', color: 'text-orange-500', gradient: 'from-orange-500/20 to-red-500/20' },
+  streak_100: { icon: '🔥', color: 'text-orange-500', gradient: 'from-orange-500/20 to-red-500/20' },
+  // Points achievements
+  points_1000: { icon: '⭐', color: 'text-yellow-500', gradient: 'from-yellow-500/20 to-amber-500/20' },
+  points_5000: { icon: '🌟', color: 'text-yellow-500', gradient: 'from-yellow-500/20 to-amber-500/20' },
+  points_10000: { icon: '💫', color: 'text-yellow-500', gradient: 'from-yellow-500/20 to-amber-500/20' },
+  // Phrases achievements
+  phrases_50: { icon: '📚', color: 'text-blue-500', gradient: 'from-blue-500/20 to-indigo-500/20' },
+  phrases_100: { icon: '📖', color: 'text-blue-500', gradient: 'from-blue-500/20 to-indigo-500/20' },
+  phrases_500: { icon: '🎓', color: 'text-blue-500', gradient: 'from-blue-500/20 to-indigo-500/20' },
+  // Special achievements
+  perfect_10: { icon: '🎯', color: 'text-green-500', gradient: 'from-green-500/20 to-emerald-500/20' },
+  speed_demon: { icon: '⚡', color: 'text-purple-500', gradient: 'from-purple-500/20 to-violet-500/20' },
+  polyglot: { icon: '🌍', color: 'text-cyan-500', gradient: 'from-cyan-500/20 to-teal-500/20' },
+};
+
+// Backend Achievement Card Component
+const BackendAchievementCard = ({ achievement }: { achievement: UserAchievement }) => {
+  const config = ACHIEVEMENT_CONFIG[achievement.achievement_type] || {
+    icon: '🏆',
+    color: 'text-primary',
+    gradient: 'from-primary/20 to-primary/10'
+  };
+  
+  // Format date nicely
+  const achievedDate = new Date(achievement.achieved_at);
+  const formattedDate = achievedDate.toLocaleDateString('es-ES', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
   
   return (
-    <div className={`rounded-xl p-3 transition-all ${
-      isUnlocked 
-        ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30' 
-        : 'bg-muted/50 opacity-60'
-    }`}>
+    <div className={`rounded-xl p-4 transition-all hover:scale-[1.02] bg-gradient-to-r ${config.gradient} border border-primary/20 shadow-sm`}>
       <div className="flex items-center gap-3">
-        <div className={`text-2xl ${isUnlocked ? '' : 'grayscale'}`}>
-          {achievement.icon}
+        <div className="text-3xl animate-bounce-slow">
+          {config.icon}
         </div>
         <div className="flex-1 min-w-0">
-          <p className={`font-semibold text-sm truncate ${isUnlocked ? 'text-foreground' : 'text-muted-foreground'}`}>
-            {achievement.title}
+          <p className="font-semibold text-foreground">
+            {achievement.achievement_name}
           </p>
-          <p className="text-xs text-muted-foreground truncate">
-            {achievement.description}
+          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+            <Calendar className="w-3 h-3" />
+            {formattedDate}
           </p>
         </div>
-        {isUnlocked && (
-          <div className="text-green-500">
-            ✓
-          </div>
-        )}
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-500/20">
+          <span className="text-green-500 text-lg">✓</span>
+        </div>
       </div>
-      
-      {/* Progress bar for locked achievements */}
-      {!isUnlocked && (
-        <div className="mt-2">
-          <div className="w-full bg-muted rounded-full h-1.5">
-            <div 
-              className="bg-primary h-1.5 rounded-full transition-all"
-              style={{ width: `${Math.min(achievement.progress, 100)}%` }}
-            />
-          </div>
-          <p className="text-xs text-muted-foreground mt-1 text-right">
-            {Math.round(achievement.progress)}%
-          </p>
-        </div>
-      )}
     </div>
   );
 };

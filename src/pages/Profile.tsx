@@ -62,6 +62,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { getUserStats, getAccuracy, getUnlockedAchievementsCount } from '@/services/gamificationService';
 import { useStreak } from '@/contexts/StreakContext';
+import { usePoints } from '@/contexts/PointsContext';
 import { generateStatsShareText } from '@/services/shareService';
 import { LANGUAGE_NAMES, Language } from '@/types/phrases';
 import logo from '@/assets/logo.png';
@@ -83,6 +84,7 @@ const Profile = () => {
   const { user, logout } = useAuth();
   const { isDark } = useTheme();
   const { streak, bestStreak } = useStreak();
+  const { totalPoints: backendPoints } = usePoints();
   const [stats, setStats] = useState(getUserStats());
   const [isEditing, setIsEditing] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
@@ -164,7 +166,7 @@ const Profile = () => {
     { 
       icon: <Trophy className="w-6 h-6" />, 
       label: 'Puntos totales', 
-      value: stats.totalPoints.toLocaleString(),
+      value: (backendPoints || stats.totalPoints).toLocaleString(),
       color: 'text-yellow-500',
       bg: 'bg-yellow-500/10',
     },

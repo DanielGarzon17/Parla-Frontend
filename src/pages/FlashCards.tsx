@@ -18,6 +18,7 @@ import {
 } from '@/services/flashcardsService';
 import { getUserStats, completePracticeSession } from '@/services/gamificationService';
 import { useStreak } from '@/contexts/StreakContext';
+import { usePoints } from '@/contexts/PointsContext';
 import { Achievement } from '@/types/gamification';
 import logo from '@/assets/logo.png';
 import cap2 from '@/assets/cap2.png';
@@ -28,6 +29,7 @@ const FlashCardsPage = () => {
   const navigate = useNavigate();
   const { isDark } = useTheme();
   const { recordPractice } = useStreak();
+  const { addPoints } = usePoints();
   
   // State
   const [sessionState, setSessionState] = useState<SessionState>('loading');
@@ -43,6 +45,7 @@ const FlashCardsPage = () => {
   } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const hasLoadedRef = useRef<boolean>(false);
+  const hasCompletedRef = useRef<boolean>(false); // Prevent duplicate completion
 
   // Load due flashcards on mount - SINGLE API CALL
   useEffect(() => {
@@ -83,6 +86,7 @@ const FlashCardsPage = () => {
     setCorrectAnswers(0);
     setSessionStreak(0);
     setSessionState('practicing');
+    hasCompletedRef.current = false; // Reset for new session
   };
 
   // Handle answer - sends quality to backend SM-2 algorithm
@@ -113,6 +117,10 @@ const FlashCardsPage = () => {
     if (currentIndex < practiceQueue.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
+      // Prevent duplicate completion
+      if (hasCompletedRef.current) return;
+      hasCompletedRef.current = true;
+      
       // Session complete - calculate results
       const finalCorrect = correct ? correctAnswers + 1 : correctAnswers;
       const result = completePracticeSession('flashcards', practiceQueue.length, finalCorrect);
@@ -123,6 +131,10 @@ const FlashCardsPage = () => {
       });
       // Record activity to update streak
       recordPractice();
+      // Send points to backend
+      if (result.pointsEarned.total > 0) {
+        addPoints(result.pointsEarned.total).catch(err => console.error('Error adding points:', err));
+      }
       setSessionState('summary');
     }
   };

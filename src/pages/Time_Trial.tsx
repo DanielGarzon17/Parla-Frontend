@@ -18,6 +18,7 @@ import {
   ApiError 
 } from "@/services/gamificationApi";
 import { useStreak } from "@/contexts/StreakContext";
+import { usePoints } from "@/contexts/PointsContext";
 import confetti from "canvas-confetti";
 import cap4 from "@/assets/cap4.png";
 
@@ -37,6 +38,7 @@ const TimeTrialPage = () => {
   const { speak, isSupported } = useSpeechSynthesis();
   const { isDark } = useTheme();
   const { recordPractice } = useStreak();
+  const { addPoints } = usePoints();
   
   // Game state
   const [gameState, setGameState] = useState<GameState>('ready');
@@ -53,6 +55,7 @@ const TimeTrialPage = () => {
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hasCompletedRef = useRef<boolean>(false); // Prevent duplicate completion
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSavingResults, setIsSavingResults] = useState(false);
   // Store answers locally to send to backend at the end
@@ -107,6 +110,7 @@ const TimeTrialPage = () => {
     setAnswer("");
     setErrorMessage(null);
     setPendingAnswers([]);
+    hasCompletedRef.current = false; // Reset for new game
 
     try {
       const response = await startTimedSession(totalTimeLimit, QUESTIONS_PER_ROUND);
@@ -196,6 +200,10 @@ const TimeTrialPage = () => {
       setGameState('playing');
       setTimeout(() => inputRef.current?.focus(), 100);
     } else {
+      // Prevent duplicate completion
+      if (hasCompletedRef.current) return;
+      hasCompletedRef.current = true;
+      
       // Game complete - finish session on backend
       playComplete();
       setIsSavingResults(true);
@@ -206,6 +214,10 @@ const TimeTrialPage = () => {
           setSession(response.session);
           // Record activity to update streak
           await recordPractice();
+          // Send points to backend (score is the total points earned)
+          if (score > 0) {
+            addPoints(score).catch(err => console.error('Error adding points:', err));
+          }
         } catch (error) {
           console.error('Error finishing session:', error);
         }
