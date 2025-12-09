@@ -63,7 +63,7 @@ const getCsrfToken = (): string | null => {
  */
 const ensureCsrfToken = async (): Promise<void> => {
   if (!getCsrfToken()) {
-    console.log('CSRF token not found, fetching...');
+    //console.log('CSRF token not found, fetching...');
     // Make a GET request to get the CSRF cookie
     await fetch(PHRASES_ENDPOINT, {
       method: 'GET',
@@ -151,7 +151,7 @@ const transformApiPhrase = (apiPhrase: ApiPhrase): SavedPhrase => {
  */
 const handleApiResponse = async <T>(response: Response): Promise<T> => {
   // Debug: log response status
-  console.log(`API Response: ${response.status} ${response.statusText}`, response.url);
+  //console.log(`API Response: ${response.status} ${response.statusText}`, response.url);
   
   if (!response.ok) {
     let errorMessage = `Error ${response.status}: ${response.statusText}`;
@@ -398,7 +398,7 @@ export const createPhrase = async (
     // Backend PhraseCreateSerializer returns the created phrase but WITHOUT id
     const createData = await handleApiResponse<ApiPhraseCreateResponse>(response);
     
-    console.log('Create phrase response:', createData);
+    //console.log('Create phrase response:', createData);
     
     // Since backend doesn't return ID, we need to fetch the latest phrase
     // The list is ordered by -created_at, so the first one should be our new phrase

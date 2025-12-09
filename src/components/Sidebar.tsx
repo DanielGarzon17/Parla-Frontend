@@ -21,6 +21,7 @@ import {
   Library,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getUserStats } from '@/services/gamificationService';
@@ -83,6 +84,7 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
   const { streak } = useStreak();
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [stats, setStats] = useState(getUserStats());
 
   // Use backend values with fallback to local stats
@@ -102,9 +104,17 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
   }, [isCollapsed, onCollapsedChange]);
 
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      navigate('/login');
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const handleNavigate = (path: string) => {
@@ -118,8 +128,10 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
 
   const isActive = (path: string) => location.pathname === path;
 
-  // Get display name from user data
-  const displayName = user?.username || 'Usuario';
+  // Get display name from user data - prefer first_name + last_name
+  const displayName = user?.first_name && user?.last_name 
+    ? `${user.first_name} ${user.last_name}` 
+    : user?.first_name || user?.username || 'Usuario';
   const userPicture = user?.profile_picture;
 
   // Sidebar content component for mobile (always expanded)
@@ -206,11 +218,21 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
       <div className="p-3 border-t border-border/50">
         <button
           onClick={handleLogout}
+          disabled={isLoggingOut}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm
-            bg-destructive hover:bg-destructive/90 text-destructive-foreground transition-all duration-200"
+            bg-destructive hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed text-destructive-foreground transition-all duration-200"
         >
-          <LogOut className="w-4 h-4" />
-          <span>Cerrar sesión</span>
+          {isLoggingOut ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Cerrando...</span>
+            </>
+          ) : (
+            <>
+              <LogOut className="w-4 h-4" />
+              <span>Cerrar sesión</span>
+            </>
+          )}
         </button>
       </div>
     </div>
@@ -338,15 +360,20 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
       <div className={`p-3 border-t border-border/50 ${isCollapsed ? 'flex justify-center' : ''}`}>
         <button
           onClick={handleLogout}
+          disabled={isLoggingOut}
           title={isCollapsed ? 'Cerrar sesión' : undefined}
           className={`
             flex items-center justify-center gap-2 rounded-xl font-medium text-sm
-            bg-destructive hover:bg-destructive/90 text-destructive-foreground transition-all duration-200
+            bg-destructive hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed text-destructive-foreground transition-all duration-200
             ${isCollapsed ? 'w-10 h-10 p-0' : 'w-full px-4 py-2.5'}
           `}
         >
-          <LogOut className="w-4 h-4" />
-          {!isCollapsed && <span>Cerrar sesión</span>}
+          {isLoggingOut ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <LogOut className="w-4 h-4" />
+          )}
+          {!isCollapsed && <span>{isLoggingOut ? 'Cerrando...' : 'Cerrar sesión'}</span>}
         </button>
       </div>
     </div>

@@ -1,7 +1,7 @@
 // Dictionary Page
 // Search and manage vocabulary words
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Search, 
   Book, 
@@ -67,8 +67,8 @@ import {
   sortWords,
   getWordStats,
 } from '@/services/dictionaryService';
-import { lookupWord, extractUniqueWords } from '@/services/translationService';
-import { fetchPhrases } from '@/services/phrasesService';
+import { lookupWord } from '@/services/translationService';
+import { useDictionary } from '@/contexts/DictionaryContext';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/hooks/useTheme';
 import logo from '@/assets/logo.png';
@@ -78,9 +78,20 @@ const Dictionary = () => {
   const { toast } = useToast();
   const { isDark } = useTheme();
   
-  // State
-  const [words, setWords] = useState<DictionaryWord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Use dictionary context for cached data
+  const { 
+    words, 
+    isLoading, 
+    isImporting, 
+    importProgress, 
+    loadDictionary, 
+    addWord: addWordToContext,
+    updateWord: updateWordInContext,
+    deleteWord: deleteWordFromContext,
+    isInitialized 
+  } = useDictionary();
+  
+  // Local UI state
   const [searchQuery, setSearchQuery] = useState('');
   const [sort, setSort] = useState<DictionarySort>('alphabetical');
   const [filters, setFilters] = useState<DictionaryFilters>({
@@ -96,9 +107,13 @@ const Dictionary = () => {
   const [wordToDelete, setWordToDelete] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
-  const hasLoadedRef = useRef<boolean>(false);
+  
+  // Load dictionary on mount (uses cache if available)
+  useEffect(() => {
+    if (!isInitialized) {
+      loadDictionary();
+    }
+  }, [isInitialized, loadDictionary]);
 
   // New word form
   const [newWord, setNewWord] = useState({
@@ -113,122 +128,6 @@ const Dictionary = () => {
     difficulty: 'medium' as Difficulty,
     wordType: 'noun' as GrammaticalCategory,
   });
-
-  // Load words from phrases - SINGLE API CALL to fetchPhrases
-  useEffect(() => {
-    // Prevent duplicate calls from React StrictMode
-    if (hasLoadedRef.current) return;
-    hasLoadedRef.current = true;
-    
-    const loadWordsFromPhrases = async () => {
-      try {
-        // 1. Fetch phrases ONCE
-        const phrases = await fetchPhrases();
-        
-        if (phrases.length === 0) {
-          setIsLoading(false);
-          return;
-        }
-        
-        // 2. Extract unique words from all phrases
-        const phraseTexts = phrases.map(p => p.phrase);
-        const uniqueWords = extractUniqueWords(phraseTexts);
-        
-        if (uniqueWords.length === 0) {
-          setIsLoading(false);
-          return;
-        }
-        
-        // 3. Create initial word entries (without translation yet)
-        const initialWords: DictionaryWord[] = uniqueWords.map((word, idx) => ({
-          id: `word_${idx}_${Date.now()}`,
-          word: word,
-          translation: '', // Will be filled by lookup
-          pronunciation: '',
-          definitions: [],
-          examples: [],
-          synonyms: [],
-          antonyms: [],
-          language: 'en' as Language,
-          targetLanguage: 'es' as Language,
-          difficulty: 'medium' as Difficulty,
-          wordType: 'other' as GrammaticalCategory,
-          isFavorite: false,
-          isLearned: false,
-          createdAt: new Date(),
-        }));
-        
-        // 4. Show words immediately (loading state for each)
-        setWords(initialWords);
-        setIsLoading(false);
-        setIsImporting(true);
-        setImportProgress({ current: 0, total: initialWords.length });
-        
-        // 5. Lookup translation and meaning for each word
-        for (let i = 0; i < initialWords.length; i++) {
-          const wordEntry = initialWords[i];
-          setImportProgress({ current: i + 1, total: initialWords.length });
-          
-          try {
-            const result = await lookupWord(wordEntry.word, 'en', 'es');
-            
-            if (result && !result.error) {
-              // Update the word with translation and definitions
-              setWords(prev => prev.map(w => 
-                w.id === wordEntry.id 
-                  ? {
-                      ...w,
-                      translation: result.translation || w.word,
-                      pronunciation: result.pronunciation || '',
-                      definitions: result.definitions.map((d, idx) => ({
-                        id: `d${Date.now()}_${idx}`,
-                        meaning: d.meaning,
-                        partOfSpeech: d.partOfSpeech,
-                      })),
-                      examples: result.examples.slice(0, 2).map((e, idx) => ({
-                        id: `e${Date.now()}_${idx}`,
-                        sentence: e.sentence,
-                        translation: e.translation,
-                      })),
-                      synonyms: result.synonyms || [],
-                      antonyms: result.antonyms || [],
-                      wordType: result.definitions[0]?.partOfSpeech || 'other',
-                    }
-                  : w
-              ));
-            }
-          } catch (err) {
-            console.error(`Error looking up word "${wordEntry.word}":`, err);
-            // Keep the word but mark translation as the word itself
-            setWords(prev => prev.map(w => 
-              w.id === wordEntry.id 
-                ? { ...w, translation: w.word }
-                : w
-            ));
-          }
-          
-          // Small delay to avoid rate limiting
-          if (i < initialWords.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 200));
-          }
-        }
-        
-      } catch (error) {
-        console.error('Error loading phrases:', error);
-        toast({
-          title: 'Error',
-          description: 'No se pudieron cargar las frases',
-          variant: 'destructive',
-        });
-      } finally {
-        setIsLoading(false);
-        setIsImporting(false);
-        setImportProgress({ current: 0, total: 0 });
-      }
-    };
-    loadWordsFromPhrases();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Filter and sort words
   const displayedWords = useMemo(() => {
@@ -261,15 +160,17 @@ const Dictionary = () => {
   };
 
   const handleToggleFavorite = (id: string) => {
-    setWords(prev => prev.map(w => 
-      w.id === id ? { ...w, isFavorite: !w.isFavorite } : w
-    ));
+    const word = words.find(w => w.id === id);
+    if (word) {
+      updateWordInContext(id, { isFavorite: !word.isFavorite });
+    }
   };
 
   const handleToggleLearned = (id: string) => {
-    setWords(prev => prev.map(w => 
-      w.id === id ? { ...w, isLearned: !w.isLearned } : w
-    ));
+    const word = words.find(w => w.id === id);
+    if (word) {
+      updateWordInContext(id, { isLearned: !word.isLearned });
+    }
   };
 
   const handleDeleteClick = (id: string) => {
@@ -334,7 +235,7 @@ const Dictionary = () => {
 
   const handleConfirmDelete = () => {
     if (wordToDelete) {
-      setWords(prev => prev.filter(w => w.id !== wordToDelete));
+      deleteWordFromContext(wordToDelete);
     }
     setIsDeleteDialogOpen(false);
     setWordToDelete(null);
@@ -363,9 +264,10 @@ const Dictionary = () => {
       isFavorite: false,
       isLearned: false,
       createdAt: new Date(),
+      reviewCount: 0,
     };
 
-    setWords(prev => [created, ...prev]);
+    addWordToContext(created);
     setNewWord({
       word: '',
       translation: '',

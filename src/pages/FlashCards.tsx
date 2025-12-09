@@ -1,7 +1,7 @@
 // FlashCards Practice Page (HU10, HU10.1, HU10.2, HU10.3)
 // Practice saved phrases with gamification using SM-2 spaced repetition
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shuffle, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,23 +16,30 @@ import {
   answerFlashcard,
   FlashcardForPractice 
 } from '@/services/flashcardsService';
-import { getUserStats, completePracticeSession } from '@/services/gamificationService';
+import { getUserStats, completePracticeSession as completeLocalSession } from '@/services/gamificationService';
+import { 
+  startPracticeSession as startBackendSession, 
+  completePracticeSession as completeBackendSession,
+  addPracticeDetail
+} from '@/services/gamificationApi';
 import { useStreak } from '@/contexts/StreakContext';
 import { usePoints } from '@/contexts/PointsContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Achievement } from '@/types/gamification';
 import logo from '@/assets/logo.png';
 import cap2 from '@/assets/cap2.png';
 
-type SessionState = 'loading' | 'ready' | 'practicing' | 'summary' | 'empty' | 'error';
+type SessionState = 'idle' | 'loading' | 'ready' | 'practicing' | 'summary' | 'empty' | 'error';
 
 const FlashCardsPage = () => {
   const navigate = useNavigate();
   const { isDark } = useTheme();
-  const { recordPractice } = useStreak();
+  const { streak, recordPractice, refreshStreak } = useStreak();
   const { addPoints } = usePoints();
+  const { user } = useAuth();
   
-  // State
-  const [sessionState, setSessionState] = useState<SessionState>('loading');
+  // State - Start in 'idle' state, no API calls until user clicks play
+  const [sessionState, setSessionState] = useState<SessionState>('idle');
   const [dueFlashcards, setDueFlashcards] = useState<FlashcardForPractice[]>([]);
   const [practiceQueue, setPracticeQueue] = useState<FlashcardForPractice[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -44,49 +51,79 @@ const FlashCardsPage = () => {
     newAchievements: Achievement[];
   } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const hasLoadedRef = useRef<boolean>(false);
+  const [backendSessionId, setBackendSessionId] = useState<number | null>(null);
   const hasCompletedRef = useRef<boolean>(false); // Prevent duplicate completion
 
-  // Load due flashcards on mount - SINGLE API CALL
-  useEffect(() => {
-    // Prevent duplicate calls from React StrictMode
-    if (hasLoadedRef.current) return;
-    hasLoadedRef.current = true;
+  // Start game - load flashcards and start session
+  const startPractice = async () => {
+    setSessionState('loading');
+    setErrorMessage(null);
     
-    const loadDueFlashcards = async () => {
-      try {
-        const data = await fetchDueFlashcardsWithPhrases();
-        console.log('Due flashcards loaded:', data);
-        setDueFlashcards(data);
-        if (data.length === 0) {
-          setSessionState('empty');
-        } else {
-          setSessionState('ready');
-        }
-      } catch (error) {
-        console.error('Error loading due flashcards:', error);
-        if (error instanceof PhrasesApiError) {
-          setErrorMessage(error.message);
-        } else {
-          setErrorMessage('Error al cargar las flashcards. Por favor, intenta de nuevo.');
-        }
-        setSessionState('error');
+    try {
+      // Load flashcards when user clicks play
+      const data = await fetchDueFlashcardsWithPhrases();
+      // //console.log('Due flashcards loaded:', data);
+      
+      if (data.length === 0) {
+        setSessionState('empty');
+        return;
       }
-    };
-    loadDueFlashcards();
-  }, []);
-
-  // Shuffle and prepare practice queue
-  const startPractice = () => {
-    const shuffled = [...dueFlashcards].sort(() => Math.random() - 0.5);
-    // Take up to 10 flashcards for a session
-    const sessionFlashcards = shuffled.slice(0, Math.min(10, shuffled.length));
-    setPracticeQueue(sessionFlashcards);
-    setCurrentIndex(0);
-    setCorrectAnswers(0);
-    setSessionStreak(0);
-    setSessionState('practicing');
-    hasCompletedRef.current = false; // Reset for new session
+      
+      setDueFlashcards(data);
+      
+      // Shuffle and prepare practice queue
+      const shuffled = [...data].sort(() => Math.random() - 0.5);
+      const sessionFlashcards = shuffled.slice(0, Math.min(10, shuffled.length));
+      setPracticeQueue(sessionFlashcards);
+      setCurrentIndex(0);
+      setCorrectAnswers(0);
+      setSessionStreak(0);
+      hasCompletedRef.current = false;
+      
+      // Start backend session to track stats
+      try {
+        const session = await startBackendSession('flashcard');
+        setBackendSessionId(session.id);
+        // //console.log('Backend session started:', session.id);
+      } catch (error) {
+        console.error('Error starting backend session:', error);
+      }
+      
+      setSessionState('practicing');
+    } catch (error) {
+      console.error('Error loading due flashcards:', error);
+      if (error instanceof PhrasesApiError) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage('Error al cargar las flashcards. Por favor, intenta de nuevo.');
+      }
+      setSessionState('error');
+    }
+  };
+  
+  // Continue practicing (after summary) - reuse existing flashcards or reload
+  const continuePractice = async () => {
+    if (dueFlashcards.length > 0) {
+      const shuffled = [...dueFlashcards].sort(() => Math.random() - 0.5);
+      const sessionFlashcards = shuffled.slice(0, Math.min(10, shuffled.length));
+      setPracticeQueue(sessionFlashcards);
+      setCurrentIndex(0);
+      setCorrectAnswers(0);
+      setSessionStreak(0);
+      hasCompletedRef.current = false;
+      
+      try {
+        const session = await startBackendSession('flashcard');
+        setBackendSessionId(session.id);
+      } catch (error) {
+        console.error('Error starting backend session:', error);
+      }
+      
+      setSessionState('practicing');
+    } else {
+      // Reload flashcards
+      await startPractice();
+    }
   };
 
   // Handle answer - sends quality to backend SM-2 algorithm
@@ -100,10 +137,23 @@ const FlashCardsPage = () => {
     
     try {
       await answerFlashcard(currentItem.flashcard.phrase, quality);
-      console.log(`Flashcard ${currentItem.flashcard.id} answered with quality ${quality}`);
+      // //console.log(`Flashcard ${currentItem.flashcard.id} answered with quality ${quality}`);
     } catch (error) {
       console.error('Error updating flashcard:', error);
       // Continue even if update fails - don't block the user
+    }
+    
+    // Record answer in backend session (updates DailyStatistic)
+    if (backendSessionId && currentItem.phrase) {
+      try {
+        await addPracticeDetail(backendSessionId, {
+          phrase_id: parseInt(currentItem.phrase.id),
+          was_correct: correct,
+          response_time_seconds: 0
+        });
+      } catch (error) {
+        console.error('Error recording practice detail:', error);
+      }
     }
     
     if (correct) {
@@ -121,9 +171,19 @@ const FlashCardsPage = () => {
       if (hasCompletedRef.current) return;
       hasCompletedRef.current = true;
       
-      // Session complete - calculate results
+      // Complete backend session
+      if (backendSessionId) {
+        try {
+          await completeBackendSession(backendSessionId);
+          // //console.log('Backend session completed:', backendSessionId);
+        } catch (error) {
+          console.error('Error completing backend session:', error);
+        }
+      }
+      
+      // Session complete - calculate results (local)
       const finalCorrect = correct ? correctAnswers + 1 : correctAnswers;
-      const result = completePracticeSession('flashcards', practiceQueue.length, finalCorrect);
+      const result = completeLocalSession('flashcards', practiceQueue.length, finalCorrect);
       setUserStats(result.stats);
       setSessionResults({
         pointsEarned: result.pointsEarned,
@@ -131,7 +191,7 @@ const FlashCardsPage = () => {
       });
       // Record activity to update streak
       recordPractice();
-      // Send points to backend
+      // Send points to backend (already sent via addPracticeDetail, but this ensures local sync)
       if (result.pointsEarned.total > 0) {
         addPoints(result.pointsEarned.total).catch(err => console.error('Error adding points:', err));
       }
@@ -164,7 +224,7 @@ const FlashCardsPage = () => {
           <h1 className="text-2xl font-bold text-foreground">FlashCards</h1>
           {sessionState === 'practicing' && (
             <div className="bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm font-bold">
-              ⭐ {userStats.totalPoints} pts
+              ⭐ {user?.total_points ?? 0} pts
             </div>
           )}
         </div>
@@ -226,26 +286,25 @@ const FlashCardsPage = () => {
           </div>
         )}
 
-        {/* Ready State - Start screen */}
-        {sessionState === 'ready' && (
+        {/* Idle State - Initial screen before loading */}
+        {sessionState === 'idle' && (
           <div className={`text-center backdrop-blur rounded-3xl p-8 max-w-md ${
             isDark ? 'bg-gray-800/95' : 'bg-card/90'
           }`}>
-            {/* <div className="text-6xl mb-4">🎴</div> */}
             <h2 className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-foreground'}`}>
               ¡Tus Flash-Cards te esperan!
             </h2>
             <p className={`mb-2 ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>
-              Tienes {dueFlashcards.length} flashcards pendientes
+              Practica tus frases guardadas
             </p>
             
-            {/* Current streak indicator */}
+            {/* Current streak indicator - using real data from backend */}
             <div className={`rounded-xl p-4 mb-6 flex items-center justify-center gap-3 ${
               isDark ? 'bg-orange-500/20' : 'bg-orange-500/10'
             }`}>
               <span className="text-3xl">🔥</span>
               <div className="text-left">
-                <p className={`text-2xl font-bold ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>{userStats.currentStreak} días</p>
+                <p className={`text-2xl font-bold ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>{user?.current_streak ?? streak ?? 0} días</p>
                 <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Racha actual</p>
               </div>
             </div>
@@ -257,7 +316,7 @@ const FlashCardsPage = () => {
                 onClick={startPractice}
               >
                 <Shuffle className="w-5 h-5 mr-2" />
-                Comenzar sesión
+                Jugar!
               </Button>
               <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-muted-foreground'}`}>
                 Practicarás hasta 10 frases aleatorias
@@ -283,9 +342,9 @@ const FlashCardsPage = () => {
             correctAnswers={correctAnswers}
             totalQuestions={practiceQueue.length}
             pointsEarned={sessionResults.pointsEarned}
-            currentStreak={userStats.currentStreak}
+            currentStreak={user?.current_streak ?? streak ?? 0}
             newAchievements={sessionResults.newAchievements}
-            onContinue={startPractice}
+            onContinue={continuePractice}
             onGoHome={() => navigate('/dashboard')}
           />
         )}

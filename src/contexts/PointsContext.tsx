@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { getPoints, addPoints as addPointsApi } from '@/services/gamificationApi';
+import { useAuth } from '@/hooks/useAuth';
 
 interface PointsContextType {
   totalPoints: number;
@@ -12,11 +13,21 @@ const PointsContext = createContext<PointsContextType | undefined>(undefined);
 
 export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [totalPoints, setTotalPoints] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const hasLoadedRef = useRef<boolean>(false);
+  const { isAuthenticated } = useAuth();
 
-  // Load points on mount
+  // Load points only when authenticated
   useEffect(() => {
+    // Reset when user logs out
+    if (!isAuthenticated) {
+      setTotalPoints(0);
+      setIsLoading(false);
+      hasLoadedRef.current = false;
+      return;
+    }
+
+    // Don't reload if already loaded
     if (hasLoadedRef.current) return;
     hasLoadedRef.current = true;
 
@@ -33,7 +44,7 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     loadPoints();
-  }, []);
+  }, [isAuthenticated]);
 
   const refreshPoints = useCallback(async () => {
     try {
