@@ -31,7 +31,7 @@ export const shareContent = async (content: ShareContent): Promise<boolean> => {
       return true;
     } catch (error) {
       // User cancelled or error
-      console.log('Share cancelled or failed:', error);
+      //console.log('Share cancelled or failed:', error);
       return false;
     }
   }
@@ -44,7 +44,7 @@ export const shareContent = async (content: ShareContent): Promise<boolean> => {
 export const generatePhraseShareText = (phrase: SavedPhrase): ShareContent => {
   return {
     title: '¡Aprendí una nueva frase con Parla!',
-    text: `📚 "${phrase.phrase}" significa "${phrase.translation}"${phrase.context ? ` - ${phrase.context}` : ''}\n\n¡Aprende idiomas con Parla! 🎓`,
+    text: `"${phrase.phrase}" significa "${phrase.translation}"${phrase.context ? ` - ${phrase.context}` : ''}\n\n¡Aprende idiomas con Parla!`,
     url: window.location.origin,
   };
 };
@@ -55,7 +55,7 @@ export const generatePhraseShareText = (phrase: SavedPhrase): ShareContent => {
 export const generateAchievementShareText = (achievement: Achievement): ShareContent => {
   return {
     title: '¡Logro desbloqueado en Parla!',
-    text: `🏆 ¡Acabo de desbloquear "${achievement.title}"!\n${achievement.description}\n\n¡Aprende idiomas con Parla! 🎓`,
+    text: `¡Acabo de desbloquear "${achievement.title}"!\n${achievement.description}\n\n¡Aprende idiomas con Parla!`,
     url: window.location.origin,
   };
 };
@@ -66,7 +66,7 @@ export const generateAchievementShareText = (achievement: Achievement): ShareCon
 export const generateStatsShareText = (stats: UserStats): ShareContent => {
   return {
     title: '¡Mi progreso en Parla!',
-    text: `📊 Mi progreso en Parla:\n🔥 ${stats.currentStreak} días de racha\n⭐ ${stats.totalPoints} puntos\n📚 ${stats.totalPhrasesPracticed} frases practicadas\n🏆 ${stats.achievements.filter(a => a.unlockedAt).length} logros\n\n¡Aprende idiomas con Parla! 🎓`,
+    text: ` Mi progreso en Parla:\n ${stats.currentStreak} días de racha\n${stats.totalPoints} puntos\n ${stats.achievements.filter(a => a.unlockedAt).length} logros\n\n¡Aprende idiomas con Parla!`,
     url: window.location.origin,
   };
 };

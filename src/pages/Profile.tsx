@@ -62,6 +62,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { getUserStats, getAccuracy, getUnlockedAchievementsCount } from '@/services/gamificationService';
 import { useStreak } from '@/contexts/StreakContext';
+import { usePoints } from '@/contexts/PointsContext';
 import { generateStatsShareText } from '@/services/shareService';
 import { LANGUAGE_NAMES, Language } from '@/types/phrases';
 import logo from '@/assets/logo.png';
@@ -69,6 +70,8 @@ import logo from '@/assets/logo.png';
 
 interface UserSettings {
   displayName: string;
+  firstName: string;
+  lastName: string;
   email: string;
   nativeLanguage: Language;
   learningLanguage: Language;
@@ -80,16 +83,28 @@ interface UserSettings {
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUserProfile } = useAuth();
   const { isDark } = useTheme();
   const { streak, bestStreak } = useStreak();
+  const { totalPoints: backendPoints } = usePoints();
   const [stats, setStats] = useState(getUserStats());
   const [isEditing, setIsEditing] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   
+  // Compute display name from backend user data
+  const getDisplayName = () => {
+    if (user?.first_name && user?.last_name) {
+      return `${user.first_name} ${user.last_name}`;
+    }
+    if (user?.first_name) return user.first_name;
+    return user?.username || 'Usuario';
+  };
+
   // Settings state - using user data directly from backend
   const [settings, setSettings] = useState<UserSettings>({
-    displayName: user?.username || 'Usuario',
+    displayName: getDisplayName(),
+    firstName: user?.first_name || '',
+    lastName: user?.last_name || '',
     email: user?.email || 'usuario@email.com',
     nativeLanguage: 'es',
     learningLanguage: 'en',
@@ -101,22 +116,32 @@ const Profile = () => {
 
   const [editedSettings, setEditedSettings] = useState<UserSettings>(settings);
 
-  // Refresh stats
+  // Refresh stats on mount - user profile is already loaded by AuthProvider
   useEffect(() => {
     setStats(getUserStats());
+    // Note: refreshUserProfile() is NOT called here because AuthProvider
+    // already validates and loads the user profile on app initialization
   }, []);
 
   // Update settings when user data changes
   useEffect(() => {
     if (user) {
+      const displayName = user.first_name && user.last_name 
+        ? `${user.first_name} ${user.last_name}` 
+        : user.first_name || user.username || 'Usuario';
+      
       setSettings(s => ({
         ...s,
-        displayName: user.username || s.displayName,
+        displayName,
+        firstName: user.first_name || '',
+        lastName: user.last_name || '',
         email: user.email || s.email,
       }));
       setEditedSettings(s => ({
         ...s,
-        displayName: user.username || s.displayName,
+        displayName,
+        firstName: user.first_name || '',
+        lastName: user.last_name || '',
         email: user.email || s.email,
       }));
     }
@@ -141,9 +166,20 @@ const Profile = () => {
     navigate('/login');
   };
 
-  // Use backend streak with fallback to local
-  const currentStreak = streak || stats.currentStreak;
-  const longestStreak = bestStreak || stats.longestStreak;
+  // Use backend user data with fallback to context/local
+  const currentStreak = user?.current_streak ?? streak ?? stats.currentStreak;
+  const longestStreak = user?.longest_streak ?? bestStreak ?? stats.longestStreak;
+  const totalPoints = user?.total_points ?? backendPoints ?? stats.totalPoints;
+  
+  // Format date joined
+  const formatDateJoined = () => {
+    if (!user?.date_joined) return 'N/A';
+    return new Date(user.date_joined).toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric'
+    });
+  };
 
   // Stats cards data
   const statsCards = [
@@ -164,35 +200,35 @@ const Profile = () => {
     { 
       icon: <Trophy className="w-6 h-6" />, 
       label: 'Puntos totales', 
-      value: stats.totalPoints.toLocaleString(),
+      value: totalPoints.toLocaleString(),
       color: 'text-yellow-500',
       bg: 'bg-yellow-500/10',
     },
-    { 
-      icon: <BookOpen className="w-6 h-6" />, 
-      label: 'Frases practicadas', 
-      value: stats.totalPhrasesPracticed,
-      color: 'text-blue-500',
-      bg: 'bg-blue-500/10',
-    },
-    { 
-      icon: <Target className="w-6 h-6" />, 
-      label: 'Precisión', 
-      value: `${accuracy}%`,
-      color: 'text-green-500',
-      bg: 'bg-green-500/10',
-    },
-    { 
-      icon: <Zap className="w-6 h-6" />, 
-      label: 'Sesiones', 
-      value: stats.totalSessionsCompleted,
-      color: 'text-purple-500',
-      bg: 'bg-purple-500/10',
-    },
+    // { 
+    //   icon: <BookOpen className="w-6 h-6" />, 
+    //   label: 'Frases practicadas', 
+    //   value: stats.totalPhrasesPracticed,
+    //   color: 'text-blue-500',
+    //   bg: 'bg-blue-500/10',
+    // },
+    // { 
+    //   icon: <Target className="w-6 h-6" />, 
+    //   label: 'Precisión', 
+    //   value: `${accuracy}%`,
+    //   color: 'text-green-500',
+    //   bg: 'bg-green-500/10',
+    // },
+    // { 
+    //   icon: <Zap className="w-6 h-6" />, 
+    //   label: 'Sesiones', 
+    //   value: stats.totalSessionsCompleted,
+    //   color: 'text-purple-500',
+    //   bg: 'bg-purple-500/10',
+    // },
     { 
       icon: <Calendar className="w-6 h-6" />, 
-      label: 'Días activos', 
-      value: stats.activeDays,
+      label: 'Miembro desde', 
+      value: formatDateJoined(),
       color: 'text-cyan-500',
       bg: 'bg-cyan-500/10',
     },
@@ -271,7 +307,7 @@ const Profile = () => {
                     </div>
                   </div>
                   
-                  {!isEditing ? (
+                  {/* {!isEditing ? (
                     <Button variant="outline" onClick={() => setIsEditing(true)}>
                       <Edit2 className="w-4 h-4 mr-2" />
                       Editar
@@ -287,7 +323,7 @@ const Profile = () => {
                         Guardar
                       </Button>
                     </div>
-                  )}
+                  )} */}
                 </div>
               </div>
             </CardContent>

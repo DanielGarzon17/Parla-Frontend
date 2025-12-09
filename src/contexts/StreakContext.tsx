@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { getStreak, recordActivity, StreakData } from '@/services/gamificationApi';
+import { useAuth } from '@/hooks/useAuth';
 
 interface StreakContextType {
   streak: number;
@@ -24,9 +25,10 @@ export const StreakProvider: React.FC<StreakProviderProps> = ({ children }) => {
   const [streak, setStreak] = useState<number>(0);
   const [bestStreak, setBestStreak] = useState<number>(0);
   const [lastPracticeDate, setLastPracticeDate] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const hasLoadedRef = useRef<boolean>(false);
+  const { isAuthenticated } = useAuth();
 
   // Fetch streak data from backend
   const refreshStreak = useCallback(async () => {
@@ -60,8 +62,20 @@ export const StreakProvider: React.FC<StreakProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Load streak on mount - only once
+  // Load streak only when authenticated
   useEffect(() => {
+    // Reset when user logs out
+    if (!isAuthenticated) {
+      setStreak(0);
+      setBestStreak(0);
+      setLastPracticeDate(null);
+      setIsLoading(false);
+      setError(null);
+      hasLoadedRef.current = false;
+      return;
+    }
+
+    // Don't reload if already loaded
     if (hasLoadedRef.current) return;
     hasLoadedRef.current = true;
     
@@ -71,7 +85,7 @@ export const StreakProvider: React.FC<StreakProviderProps> = ({ children }) => {
       setIsLoading(false);
     };
     loadStreak();
-  }, [refreshStreak]);
+  }, [isAuthenticated, refreshStreak]);
 
   const value: StreakContextType = {
     streak,

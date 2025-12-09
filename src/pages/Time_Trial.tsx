@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Timer, Volume2, SkipForward, Check, X, Trophy, Flame } from "lucide-react";
+import { Timer, Volume2, SkipForward, Check, X, Trophy, Flame, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ParticlesBackground from "@/components/ParticlesBackground";
@@ -18,6 +18,8 @@ import {
   ApiError 
 } from "@/services/gamificationApi";
 import { useStreak } from "@/contexts/StreakContext";
+import { usePoints } from "@/contexts/PointsContext";
+import { useAuth } from "@/hooks/useAuth";
 import confetti from "canvas-confetti";
 import cap4 from "@/assets/cap4.png";
 
@@ -36,7 +38,12 @@ const TimeTrialPage = () => {
   const navigate = useNavigate();
   const { speak, isSupported } = useSpeechSynthesis();
   const { isDark } = useTheme();
-  const { recordPractice } = useStreak();
+  const { streak: globalStreak, recordPractice } = useStreak();
+  const { addPoints } = usePoints();
+  const { user } = useAuth();
+  
+  // Get real streak from backend user data
+  const userStreak = user?.current_streak ?? globalStreak ?? 0;
   
   // Game state
   const [gameState, setGameState] = useState<GameState>('ready');
@@ -53,6 +60,7 @@ const TimeTrialPage = () => {
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hasCompletedRef = useRef<boolean>(false); // Prevent duplicate completion
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSavingResults, setIsSavingResults] = useState(false);
   // Store answers locally to send to backend at the end
@@ -107,6 +115,7 @@ const TimeTrialPage = () => {
     setAnswer("");
     setErrorMessage(null);
     setPendingAnswers([]);
+    hasCompletedRef.current = false; // Reset for new game
 
     try {
       const response = await startTimedSession(totalTimeLimit, QUESTIONS_PER_ROUND);
@@ -196,6 +205,10 @@ const TimeTrialPage = () => {
       setGameState('playing');
       setTimeout(() => inputRef.current?.focus(), 100);
     } else {
+      // Prevent duplicate completion
+      if (hasCompletedRef.current) return;
+      hasCompletedRef.current = true;
+      
       // Game complete - finish session on backend
       playComplete();
       setIsSavingResults(true);
@@ -206,6 +219,10 @@ const TimeTrialPage = () => {
           setSession(response.session);
           // Record activity to update streak
           await recordPractice();
+          // Send points to backend (score is the total points earned)
+          if (score > 0) {
+            addPoints(score).catch(err => console.error('Error adding points:', err));
+          }
         } catch (error) {
           console.error('Error finishing session:', error);
         }
@@ -515,23 +532,28 @@ const TimeTrialPage = () => {
               </div>
               <h2 className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : ''}`}>¡Sesión Completada!</h2>
               
-              <div className="grid grid-cols-3 gap-4 my-8">
+              <div className="grid grid-cols-2 gap-4 my-8">
+                <div className={`rounded-xl p-4 ${isDark ? 'bg-purple-500/30' : 'bg-purple-500/20'}`}>
+                  <Target className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
+                  <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-foreground'}`}>{session?.accuracy || accuracy}%</p>
+                  <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Precisión</p>
+                </div>
+                <div className={`rounded-xl p-4 ${isDark ? 'bg-orange-500/30' : 'bg-orange-500/20'}`}>
+                  <Flame className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-orange-400' : 'text-orange-500'}`} />
+                  <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-foreground'}`}>{userStreak}</p>
+                  <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Días de racha</p>
+                </div>
                 <div className={`rounded-xl p-4 ${isDark ? 'bg-green-500/30' : 'bg-green-500/20'}`}>
-                  <p className={`text-3xl font-bold ${isDark ? 'text-green-400' : 'text-green-600'}`}>{session?.correct_answers || correctCount}</p>
+                  <Check className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-green-400' : 'text-green-500'}`} />
+                  <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-foreground'}`}>{session?.correct_answers || correctCount}/{questions.length}</p>
                   <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Correctas</p>
                 </div>
-                <div className={`rounded-xl p-4 ${isDark ? 'bg-red-500/30' : 'bg-red-500/20'}`}>
-                  <p className={`text-3xl font-bold ${isDark ? 'text-red-400' : 'text-red-600'}`}>{session?.incorrect_answers || (results.length - correctCount)}</p>
-                  <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Incorrectas</p>
-                </div>
-                <div className={`rounded-xl p-4 ${isDark ? 'bg-purple-500/30' : 'bg-purple-500/20'}`}>
-                  <p className={`text-3xl font-bold ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>{finalScore}</p>
+                <div className={`rounded-xl p-4 ${isDark ? 'bg-yellow-500/30' : 'bg-yellow-500/20'}`}>
+                  <Trophy className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-yellow-400' : 'text-yellow-500'}`} />
+                  <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-foreground'}`}>+{finalScore}</p>
                   <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Puntos</p>
                 </div>
               </div>
-
-              <div className={`text-5xl font-bold mb-2 ${isDark ? 'text-white' : 'text-primary'}`}>{session?.accuracy || accuracy}%</div>
-              <p className={`mb-8 ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Precisión</p>
 
               {/* Results list */}
               <div className="text-left space-y-2 mb-8 max-h-60 overflow-y-auto">

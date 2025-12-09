@@ -229,6 +229,38 @@ export const completePracticeSession = async (sessionId: number): Promise<Practi
   return apiPost<PracticeSession>(`/flashcards/practice-sessions/${sessionId}/complete/`, {});
 };
 
+/**
+ * Add a practice detail (record an answer)
+ * POST /api/flashcards/practice-sessions/{session_id}/detail/
+ */
+export interface PracticeDetailRequest {
+  phrase_id: number;
+  was_correct: boolean;
+  response_time_seconds?: number;
+}
+
+export interface PracticeDetailResponse {
+  id: number;
+  phrase: {
+    id: number;
+    original_text: string;
+    translated_text: string;
+  };
+  was_correct: boolean;
+  response_time_seconds: number | null;
+  answered_at: string;
+}
+
+export const addPracticeDetail = async (
+  sessionId: number,
+  detail: PracticeDetailRequest
+): Promise<PracticeDetailResponse> => {
+  return apiPost<PracticeDetailResponse>(
+    `/flashcards/practice-sessions/${sessionId}/detail/`,
+    detail
+  );
+};
+
 // ============================================
 // STATS HELPERS - Aggregate data from sessions
 // ============================================
@@ -302,6 +334,66 @@ export const fetchUserGameStats = async (): Promise<UserGameStats> => {
   }
 };
 
+/**
+ * Calculate daily stats from PracticeSession data
+ * This is a frontend alternative when DailyStatistic is not being updated by backend
+ */
+export interface DailyStatsFromSessions {
+  date: string;
+  phrases_practiced: number;
+  correct_answers: number;
+  points_earned: number;
+  sessions_count: number;
+  accuracy: number;
+}
+
+export const calculateDailyStatsFromSessions = (sessions: PracticeSession[], days: number = 7): DailyStatsFromSessions[] => {
+  const today = new Date();
+  const result: DailyStatsFromSessions[] = [];
+  
+  for (let i = days - 1; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    const dateStr = date.toISOString().split('T')[0];
+    
+    // Filter sessions for this date
+    const daySessions = sessions.filter(s => {
+      if (!s.started_at) return false;
+      const sessionDate = new Date(s.started_at).toISOString().split('T')[0];
+      return sessionDate === dateStr && s.completed;
+    });
+    
+    const phrases = daySessions.reduce((sum, s) => sum + s.phrases_practiced, 0);
+    const correct = daySessions.reduce((sum, s) => sum + s.correct_answers, 0);
+    const points = daySessions.reduce((sum, s) => sum + s.points_earned, 0);
+    
+    result.push({
+      date: dateStr,
+      phrases_practiced: phrases,
+      correct_answers: correct,
+      points_earned: points,
+      sessions_count: daySessions.length,
+      accuracy: phrases > 0 ? Math.round((correct / phrases) * 100) : 0,
+    });
+  }
+  
+  return result;
+};
+
+/**
+ * Fetch daily stats calculated from practice sessions
+ * Use this as fallback when DailyStatistic endpoint returns zeros
+ */
+export const fetchDailyStatsFromSessions = async (days: number = 7): Promise<DailyStatsFromSessions[]> => {
+  try {
+    const sessions = await getPracticeSessions();
+    return calculateDailyStatsFromSessions(sessions, days);
+  } catch (error) {
+    console.error('Error calculating daily stats from sessions:', error);
+    return [];
+  }
+};
+
 // ============================================
 // STREAK API - /api/gamification/*
 // ============================================
@@ -327,6 +419,168 @@ export const getStreak = async (): Promise<StreakData> => {
  */
 export const recordActivity = async (): Promise<StreakData> => {
   return apiPost<StreakData>('/gamification/activity/', {});
+};
+
+// ============================================
+// ACHIEVEMENTS API - /api/gamification/achievements/
+// ============================================
+
+export interface UserAchievement {
+  id: number;
+  achievement_type: string;
+  achievement_name: string;
+  achieved_at: string;
+}
+
+/**
+ * All possible achievements from backend (gamification/models.py ACHIEVEMENT_TYPES)
+ */
+export interface AchievementDefinition {
+  type: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  gradient: string;
+}
+
+export const ALL_ACHIEVEMENTS: AchievementDefinition[] = [
+  // Streak achievements
+  { type: 'streak_7', name: '7 días consecutivos', description: 'Practica 7 días seguidos', icon: '🔥', color: 'text-orange-500', gradient: 'from-orange-500/20 to-red-500/20' },
+  { type: 'streak_30', name: '30 días consecutivos', description: 'Practica 30 días seguidos', icon: '🔥', color: 'text-orange-500', gradient: 'from-orange-500/20 to-red-500/20' },
+  { type: 'streak_100', name: '100 días consecutivos', description: 'Practica 100 días seguidos', icon: '🔥', color: 'text-orange-500', gradient: 'from-orange-500/20 to-red-500/20' },
+  // Phrases achievements
+  { type: 'phrases_50', name: '50 frases guardadas', description: 'Guarda 50 frases', icon: '📚', color: 'text-blue-500', gradient: 'from-blue-500/20 to-indigo-500/20' },
+  { type: 'phrases_100', name: '100 frases guardadas', description: 'Guarda 100 frases', icon: '📖', color: 'text-blue-500', gradient: 'from-blue-500/20 to-indigo-500/20' },
+  { type: 'phrases_500', name: '500 frases guardadas', description: 'Guarda 500 frases', icon: '🎓', color: 'text-blue-500', gradient: 'from-blue-500/20 to-indigo-500/20' },
+  // Special achievements
+  { type: 'perfect_10', name: '10 sesiones perfectas', description: 'Completa 10 sesiones sin errores', icon: '🎯', color: 'text-green-500', gradient: 'from-green-500/20 to-emerald-500/20' },
+  { type: 'speed_demon', name: 'Contrarreloj < 2 min', description: 'Completa contrarreloj en menos de 2 minutos', icon: '⚡', color: 'text-purple-500', gradient: 'from-purple-500/20 to-violet-500/20' },
+  { type: 'polyglot', name: '3+ idiomas', description: 'Practica en 3 o más idiomas', icon: '🌍', color: 'text-cyan-500', gradient: 'from-cyan-500/20 to-teal-500/20' },
+  // Points achievements
+  { type: 'points_1000', name: '1,000 puntos', description: 'Alcanza 1,000 puntos', icon: '⭐', color: 'text-yellow-500', gradient: 'from-yellow-500/20 to-amber-500/20' },
+  { type: 'points_5000', name: '5,000 puntos', description: 'Alcanza 5,000 puntos', icon: '🌟', color: 'text-yellow-500', gradient: 'from-yellow-500/20 to-amber-500/20' },
+  { type: 'points_10000', name: '10,000 puntos', description: 'Alcanza 10,000 puntos', icon: '💫', color: 'text-yellow-500', gradient: 'from-yellow-500/20 to-amber-500/20' },
+];
+
+/**
+ * Get all achievements unlocked by the user
+ * GET /api/gamification/achievements/
+ */
+export const getAchievements = async (): Promise<UserAchievement[]> => {
+  return apiGet<UserAchievement[]>('/gamification/achievements/');
+};
+
+/**
+ * Get achievement definition by type
+ */
+export const getAchievementDefinition = (type: string): AchievementDefinition | undefined => {
+  return ALL_ACHIEVEMENTS.find(a => a.type === type);
+};
+
+// ============================================
+// POINTS API - /api/gamification/points/
+// ============================================
+
+export interface PointsData {
+  total_points: number;
+}
+
+/**
+ * Get user's total points
+ * GET /api/gamification/points/
+ */
+export const getPoints = async (): Promise<PointsData> => {
+  return apiGet<PointsData>('/gamification/points/');
+};
+
+/**
+ * Add points after completing a game
+ * POST /api/gamification/points/add/
+ * @param amount - Total points to add from the current game
+ * @returns Updated total points
+ */
+export const addPoints = async (amount: number): Promise<PointsData> => {
+  return apiPost<PointsData>('/gamification/points/add/', { amount });
+};
+
+// ============================================
+// STATS API - /api/gamification/daily-stats/, weekly-stats/, monthly-stats/
+// ============================================
+
+export interface DailyStatEntry {
+  id: number;
+  user: string;
+  date: string;
+  phrases_practiced: number;
+  correct_answers: number;
+  practice_minutes: number;
+  points_earned: number;
+  streak_maintained: boolean;
+  accuracy: number;
+}
+
+export interface DailyStatsResponse {
+  start_date: string;
+  end_date: string;
+  total_days: number;
+  data: DailyStatEntry[];
+}
+
+export interface WeeklyStatEntry {
+  week_start: string;
+  week_end: string;
+  total_phrases: number;
+  total_correct: number;
+  total_minutes: number;
+  total_points: number;
+  days_practiced: number;
+  average_accuracy: number;
+}
+
+export interface WeeklyStatsResponse {
+  weeks: number;
+  data: WeeklyStatEntry[];
+}
+
+export interface MonthlyStatEntry {
+  month: number;
+  year: number;
+  month_name: string;
+  total_phrases: number;
+  total_correct: number;
+  total_points: number;
+  days_active: number;
+  average_accuracy: number;
+}
+
+export interface MonthlyStatsResponse {
+  months: number;
+  data: MonthlyStatEntry[];
+}
+
+/**
+ * Get daily stats for the last N days
+ * GET /api/gamification/daily-stats/?days=7
+ */
+export const getDailyStats = async (days: number = 7): Promise<DailyStatsResponse> => {
+  return apiGet<DailyStatsResponse>(`/gamification/daily-stats/?days=${days}`);
+};
+
+/**
+ * Get weekly stats for the last N weeks
+ * GET /api/gamification/weekly-stats/?weeks=4
+ */
+export const getWeeklyStats = async (weeks: number = 4): Promise<WeeklyStatsResponse> => {
+  return apiGet<WeeklyStatsResponse>(`/gamification/weekly-stats/?weeks=${weeks}`);
+};
+
+/**
+ * Get monthly stats for the last N months
+ * GET /api/gamification/monthly-stats/?months=6
+ */
+export const getMonthlyStats = async (months: number = 6): Promise<MonthlyStatsResponse> => {
+  return apiGet<MonthlyStatsResponse>(`/gamification/monthly-stats/?months=${months}`);
 };
 
 export { ApiError };

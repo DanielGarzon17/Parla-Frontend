@@ -21,10 +21,13 @@ import {
   Library,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getUserStats } from '@/services/gamificationService';
 import { useTheme } from '@/hooks/useTheme';
+import { usePoints } from '@/contexts/PointsContext';
+import { useStreak } from '@/contexts/StreakContext';
 import logo from '@/assets/logo.png';
 
 interface SidebarProps {
@@ -77,9 +80,16 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
   const location = useLocation();
   const { logout, user } = useAuth();
   const { isDark } = useTheme();
+  const { totalPoints } = usePoints();
+  const { streak } = useStreak();
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [stats, setStats] = useState(getUserStats());
+
+  // Use backend values with fallback to local stats
+  const displayPoints = totalPoints || stats.totalPoints;
+  const displayStreak = streak || stats.currentStreak;
 
   // Refresh stats when sidebar opens
   useEffect(() => {
@@ -94,9 +104,17 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
   }, [isCollapsed, onCollapsedChange]);
 
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      navigate('/login');
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const handleNavigate = (path: string) => {
@@ -110,8 +128,10 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
 
   const isActive = (path: string) => location.pathname === path;
 
-  // Get display name from user data
-  const displayName = user?.username || 'Usuario';
+  // Get display name from user data - prefer first_name + last_name
+  const displayName = user?.first_name && user?.last_name 
+    ? `${user.first_name} ${user.last_name}` 
+    : user?.first_name || user?.username || 'Usuario';
   const userPicture = user?.profile_picture;
 
   // Sidebar content component for mobile (always expanded)
@@ -145,11 +165,11 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
         <div className="flex items-center justify-center gap-3 mt-3 w-full">
           <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full ${isDark ? 'bg-orange-500/30' : 'bg-orange-500/20'}`}>
             <Flame className="w-3.5 h-3.5 text-orange-500" />
-            <span className={`text-xs font-bold ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>{stats.currentStreak}</span>
+            <span className={`text-xs font-bold ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>{displayStreak}</span>
           </div>
           <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full ${isDark ? 'bg-purple-500/30' : 'bg-purple-500/20'}`}>
             <Trophy className={`w-3.5 h-3.5 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
-            <span className={`text-xs font-bold ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>{stats.totalPoints}</span>
+            <span className={`text-xs font-bold ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>{displayPoints.toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -198,11 +218,21 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
       <div className="p-3 border-t border-border/50">
         <button
           onClick={handleLogout}
+          disabled={isLoggingOut}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm
-            bg-destructive hover:bg-destructive/90 text-destructive-foreground transition-all duration-200"
+            bg-destructive hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed text-destructive-foreground transition-all duration-200"
         >
-          <LogOut className="w-4 h-4" />
-          <span>Cerrar sesión</span>
+          {isLoggingOut ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Cerrando...</span>
+            </>
+          ) : (
+            <>
+              <LogOut className="w-4 h-4" />
+              <span>Cerrar sesión</span>
+            </>
+          )}
         </button>
       </div>
     </div>
@@ -253,11 +283,11 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
             <div className="flex items-center justify-center gap-3 mt-3 w-full">
               <div className="flex items-center gap-1 bg-orange-500/20 px-2.5 py-1 rounded-full">
                 <Flame className="w-3.5 h-3.5 text-orange-500" />
-                <span className="text-xs font-bold text-orange-600">{stats.currentStreak}</span>
+                <span className="text-xs font-bold text-orange-600">{displayStreak}</span>
               </div>
               <div className="flex items-center gap-1 bg-purple-500/20 px-2.5 py-1 rounded-full">
                 <Trophy className="w-3.5 h-3.5 text-purple-500" />
-                <span className="text-xs font-bold text-purple-600">{stats.totalPoints}</span>
+                <span className="text-xs font-bold text-purple-600">{displayPoints.toLocaleString()}</span>
               </div>
             </div>
           </>
@@ -267,7 +297,11 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
           <div className="flex flex-col items-center gap-1 mt-2">
             <div className="flex items-center gap-1 bg-orange-500/20 px-2 py-1 rounded-full">
               <Flame className="w-3 h-3 text-orange-500" />
-              <span className="text-xs font-bold text-orange-600">{stats.currentStreak}</span>
+              <span className="text-xs font-bold text-orange-600">{displayStreak}</span>
+            </div>
+            <div className="flex items-center gap-1 bg-purple-500/20 px-2 py-1 rounded-full">
+              <Trophy className="w-3 h-3 text-purple-500" />
+              <span className="text-xs font-bold text-purple-600">{displayPoints.toLocaleString()}</span>
             </div>
           </div>
         )}
@@ -326,15 +360,20 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
       <div className={`p-3 border-t border-border/50 ${isCollapsed ? 'flex justify-center' : ''}`}>
         <button
           onClick={handleLogout}
+          disabled={isLoggingOut}
           title={isCollapsed ? 'Cerrar sesión' : undefined}
           className={`
             flex items-center justify-center gap-2 rounded-xl font-medium text-sm
-            bg-destructive hover:bg-destructive/90 text-destructive-foreground transition-all duration-200
+            bg-destructive hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed text-destructive-foreground transition-all duration-200
             ${isCollapsed ? 'w-10 h-10 p-0' : 'w-full px-4 py-2.5'}
           `}
         >
-          <LogOut className="w-4 h-4" />
-          {!isCollapsed && <span>Cerrar sesión</span>}
+          {isLoggingOut ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <LogOut className="w-4 h-4" />
+          )}
+          {!isCollapsed && <span>{isLoggingOut ? 'Cerrando...' : 'Cerrar sesión'}</span>}
         </button>
       </div>
     </div>

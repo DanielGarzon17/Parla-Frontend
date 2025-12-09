@@ -7,6 +7,8 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from "./contexts/AuthProvider";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { StreakProvider } from "./contexts/StreakContext";
+import { PointsProvider } from "./contexts/PointsContext";
+import { DictionaryProvider } from "./contexts/DictionaryContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import ThemeToggle from "./components/ThemeToggle";
@@ -31,11 +33,13 @@ const App = () => (
       <ThemeProvider>
         <AuthProvider>
           <StreakProvider>
+          <PointsProvider>
+          <DictionaryProvider>
             <TooltipProvider>
             <Toaster />
             <Sonner />
             <ThemeToggle />
-            <BrowserRouter>
+            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<Navigate to="/login" replace />} />
@@ -98,6 +102,8 @@ const App = () => (
               </Routes>
             </BrowserRouter>
             </TooltipProvider>
+          </DictionaryProvider>
+          </PointsProvider>
           </StreakProvider>
         </AuthProvider>
       </ThemeProvider>

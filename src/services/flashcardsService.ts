@@ -51,7 +51,7 @@ const getCsrfToken = (): string | null => {
  */
 const ensureCsrfToken = async (): Promise<void> => {
   if (!getCsrfToken()) {
-    console.log('CSRF token not found, fetching...');
+    //console.log('CSRF token not found, fetching...');
     // Make a GET request to get the CSRF cookie
     await fetch(FLASHCARDS_ENDPOINT, {
       method: 'GET',
@@ -83,7 +83,7 @@ const getAuthHeaders = (): HeadersInit => {
  * Handle API response and throw appropriate errors
  */
 const handleApiResponse = async <T>(response: Response): Promise<T> => {
-  console.log(`Flashcards API Response: ${response.status} ${response.statusText}`, response.url);
+  //console.log(`Flashcards API Response: ${response.status} ${response.statusText}`, response.url);
   
   if (!response.ok) {
     let errorMessage = `Error ${response.status}: ${response.statusText}`;
@@ -124,7 +124,7 @@ export const createFlashcard = async (phraseId: number): Promise<Flashcard> => {
       phrase: phraseId,
     };
 
-    console.log('Creating flashcard with body:', requestBody);
+    //console.log('Creating flashcard with body:', requestBody);
 
     const response = await fetch(FLASHCARDS_ENDPOINT, {
       method: 'POST',
@@ -134,7 +134,7 @@ export const createFlashcard = async (phraseId: number): Promise<Flashcard> => {
     });
 
     const data = await handleApiResponse<Flashcard>(response);
-    console.log('Flashcard created:', data);
+    //console.log('Flashcard created:', data);
     return data;
   } catch (error) {
     if (error instanceof PhrasesApiError) {
@@ -284,17 +284,17 @@ export const fetchDueFlashcardsWithPhrases = async (): Promise<FlashcardForPract
   try {
     // First try to get due flashcards
     let flashcards = await fetchDueFlashcards();
-    console.log(`Due flashcards from /due/: ${flashcards.length}`, flashcards);
+    //console.log(`Due flashcards from /due/: ${flashcards.length}`, flashcards);
     
     // If no due flashcards, get ALL flashcards as fallback
     if (flashcards.length === 0) {
-      console.log('No due flashcards, fetching all flashcards...');
+      //console.log('No due flashcards, fetching all flashcards...');
       flashcards = await fetchFlashcards();
-      console.log(`All flashcards from /: ${flashcards.length}`, flashcards);
+      //console.log(`All flashcards from /: ${flashcards.length}`, flashcards);
     }
     
     if (flashcards.length === 0) {
-      console.log('No flashcards found at all');
+      //console.log('No flashcards found at all');
       return [];
     }
     
@@ -302,7 +302,7 @@ export const fetchDueFlashcardsWithPhrases = async (): Promise<FlashcardForPract
     const flashcardsWithPhrases = await Promise.all(
       flashcards.map(async (flashcard) => {
         try {
-          console.log(`Fetching phrase ${flashcard.phrase} for flashcard ${flashcard.id}`);
+          //console.log(`Fetching phrase ${flashcard.phrase} for flashcard ${flashcard.id}`);
           const phrase = await getPhraseById(flashcard.phrase.toString());
           if (phrase) {
             return { flashcard, phrase };
@@ -318,7 +318,7 @@ export const fetchDueFlashcardsWithPhrases = async (): Promise<FlashcardForPract
     
     // Filter out nulls (phrases that couldn't be fetched)
     const result = flashcardsWithPhrases.filter((item): item is FlashcardForPractice => item !== null);
-    console.log(`Flashcards with phrases: ${result.length}`, result);
+    //console.log(`Flashcards with phrases: ${result.length}`, result);
     return result;
   } catch (error) {
     console.error('Error in fetchDueFlashcardsWithPhrases:', error);
