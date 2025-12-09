@@ -17,6 +17,7 @@ import {
   PracticeSession,
   ApiError 
 } from "@/services/gamificationApi";
+import { useStreak } from "@/contexts/StreakContext";
 import confetti from "canvas-confetti";
 import cap4 from "@/assets/cap4.png";
 
@@ -35,6 +36,7 @@ const TimeTrialPage = () => {
   const navigate = useNavigate();
   const { speak, isSupported } = useSpeechSynthesis();
   const { isDark } = useTheme();
+  const { recordPractice } = useStreak();
   
   // Game state
   const [gameState, setGameState] = useState<GameState>('ready');
@@ -202,6 +204,8 @@ const TimeTrialPage = () => {
         try {
           const response = await finishTimedSession(session.id);
           setSession(response.session);
+          // Record activity to update streak
+          await recordPractice();
         } catch (error) {
           console.error('Error finishing session:', error);
         }

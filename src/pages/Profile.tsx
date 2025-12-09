@@ -23,6 +23,7 @@ import {
   Calendar,
   BookOpen,
   Zap,
+  Award,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -60,6 +61,7 @@ import ShareButton from '@/components/ShareButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { getUserStats, getAccuracy, getUnlockedAchievementsCount } from '@/services/gamificationService';
+import { useStreak } from '@/contexts/StreakContext';
 import { generateStatsShareText } from '@/services/shareService';
 import { LANGUAGE_NAMES, Language } from '@/types/phrases';
 import logo from '@/assets/logo.png';
@@ -80,6 +82,7 @@ const Profile = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { isDark } = useTheme();
+  const { streak, bestStreak } = useStreak();
   const [stats, setStats] = useState(getUserStats());
   const [isEditing, setIsEditing] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
@@ -138,14 +141,25 @@ const Profile = () => {
     navigate('/login');
   };
 
+  // Use backend streak with fallback to local
+  const currentStreak = streak || stats.currentStreak;
+  const longestStreak = bestStreak || stats.longestStreak;
+
   // Stats cards data
   const statsCards = [
     { 
       icon: <Flame className="w-6 h-6" />, 
       label: 'Racha actual', 
-      value: `${stats.currentStreak} días`,
+      value: `${currentStreak} días`,
       color: 'text-orange-500',
       bg: 'bg-orange-500/10',
+    },
+    { 
+      icon: <Award className="w-6 h-6" />, 
+      label: 'Mejor racha', 
+      value: `${longestStreak} días`,
+      color: 'text-amber-500',
+      bg: 'bg-amber-500/10',
     },
     { 
       icon: <Trophy className="w-6 h-6" />, 

@@ -11,12 +11,15 @@ import {
   ApiPhrase,
   ApiPhraseCreateResponse,
   ApiPhrasesResponse,
+  ApiCategory,
+  ApiCategoriesResponse,
   ApiError
 } from '@/types/phrases';
 
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 const PHRASES_ENDPOINT = `${API_BASE_URL}/phrases/phrases/`;
+const CATEGORIES_ENDPOINT = `${API_BASE_URL}/phrases/categories/`;
 
 // Language code to ID mapping (based on backend)
 export const LANGUAGE_CODE_TO_ID: Record<string, number> = {
@@ -177,6 +180,42 @@ const handleApiResponse = async <T>(response: Response): Promise<T> => {
 };
 
 /**
+ * Fetch all categories from the backend API
+ * GET /api/phrases/categories/
+ * Handles pagination to get all categories
+ */
+export const fetchCategories = async (): Promise<ApiCategory[]> => {
+  try {
+    const allCategories: ApiCategory[] = [];
+    let nextUrl: string | null = CATEGORIES_ENDPOINT;
+    
+    // Fetch all pages of categories
+    while (nextUrl) {
+      const response = await fetch(nextUrl, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+      });
+
+      const data = await handleApiResponse<ApiCategoriesResponse>(response);
+      allCategories.push(...data.results);
+      nextUrl = data.next;
+    }
+    
+    return allCategories;
+  } catch (error) {
+    if (error instanceof PhrasesApiError) {
+      throw error;
+    }
+    
+    throw new PhrasesApiError(
+      error instanceof Error ? error.message : 'Error al obtener las categorías',
+      undefined
+    );
+  }
+};
+
+/**
  * Fetch all saved phrases from the backend API
  */
 export const fetchPhrases = async (): Promise<SavedPhrase[]> => {
@@ -275,12 +314,18 @@ export const getPhraseById = async (id: string): Promise<SavedPhrase | null> => 
 
 /**
  * Create phrase request body interface
+ * Matches backend PhraseCreateSerializer fields
  */
 interface CreatePhraseRequest {
   original_text: string;
   translated_text: string;
   source_language: number;
   target_language: number;
+  pronunciation?: string | null;
+  source_url?: string | null;
+  source_type?: 'youtube' | 'netflix' | 'web' | 'pdf' | null;
+  context?: string | null;
+  category_ids?: number[];
 }
 
 /**
@@ -289,6 +334,17 @@ interface CreatePhraseRequest {
 export interface CreatePhraseResult {
   phrase: SavedPhrase;
   phraseId: number; // Numeric ID from backend, needed for creating flashcards
+}
+
+/**
+ * Options for creating a phrase
+ */
+export interface CreatePhraseOptions {
+  pronunciation?: string;
+  sourceUrl?: string;
+  sourceType?: 'youtube' | 'netflix' | 'web' | 'pdf';
+  context?: string;
+  categoryIds?: number[];
 }
 
 /**
@@ -302,13 +358,15 @@ export interface CreatePhraseResult {
  * @param translatedText - The translated text
  * @param sourceLanguageId - Source language ID (1=en, 2=es, 3=de, 4=it, 5=pt, 7=fr)
  * @param targetLanguageId - Target language ID
+ * @param options - Additional options (pronunciation, sourceUrl, sourceType, context, categoryIds)
  * @returns CreatePhraseResult with both SavedPhrase and numeric phraseId
  */
 export const createPhrase = async (
   originalText: string,
   translatedText: string,
   sourceLanguageId: number = 1,
-  targetLanguageId: number = 2
+  targetLanguageId: number = 2,
+  options?: CreatePhraseOptions
 ): Promise<CreatePhraseResult> => {
   try {
     // Ensure CSRF token is available before making POST request
@@ -320,6 +378,15 @@ export const createPhrase = async (
       source_language: sourceLanguageId,
       target_language: targetLanguageId,
     };
+
+    // Add optional fields if provided
+    if (options?.pronunciation) requestBody.pronunciation = options.pronunciation;
+    if (options?.sourceUrl) requestBody.source_url = options.sourceUrl;
+    if (options?.sourceType) requestBody.source_type = options.sourceType;
+    if (options?.context) requestBody.context = options.context;
+    if (options?.categoryIds && options.categoryIds.length > 0) {
+      requestBody.category_ids = options.categoryIds;
+    }
 
     const response = await fetch(PHRASES_ENDPOINT, {
       method: 'POST',
@@ -393,21 +460,38 @@ export const createPhrase = async (
 };
 
 /**
+ * Extended phrase input for creating phrases with category IDs
+ */
+export interface AddPhraseInput extends Omit<SavedPhrase, 'id' | 'createdAt'> {
+  categoryIds?: number[];
+  sourceType?: 'youtube' | 'netflix' | 'web' | 'pdf';
+}
+
+/**
  * Add a new phrase via API (using SavedPhrase format)
  * POST /api/phrases/phrases/
- * Body: { original_text, translated_text, source_language (id), target_language (id) }
+ * Body: { original_text, translated_text, source_language (id), target_language (id), category_ids, etc. }
  * @returns CreatePhraseResult with both SavedPhrase and numeric phraseId
  */
-export const addPhrase = async (phrase: Omit<SavedPhrase, 'id' | 'createdAt'>): Promise<CreatePhraseResult> => {
+export const addPhrase = async (phrase: AddPhraseInput): Promise<CreatePhraseResult> => {
   // Get language IDs from codes
   const sourceLanguageId = LANGUAGE_CODE_TO_ID[phrase.language] || 1; // Default to English
   const targetLanguageId = 2; // Default to Spanish (es) as target
+  
+  const options: CreatePhraseOptions = {};
+  if (phrase.context) options.context = phrase.context;
+  if (phrase.sourceUrl) options.sourceUrl = phrase.sourceUrl;
+  if (phrase.sourceType) options.sourceType = phrase.sourceType;
+  if (phrase.categoryIds && phrase.categoryIds.length > 0) {
+    options.categoryIds = phrase.categoryIds;
+  }
   
   return createPhrase(
     phrase.phrase,
     phrase.translation,
     sourceLanguageId,
-    targetLanguageId
+    targetLanguageId,
+    Object.keys(options).length > 0 ? options : undefined
   );
 };
 

@@ -302,4 +302,31 @@ export const fetchUserGameStats = async (): Promise<UserGameStats> => {
   }
 };
 
+// ============================================
+// STREAK API - /api/gamification/*
+// ============================================
+
+export interface StreakData {
+  streak: number;
+  best_streak: number;
+  last_practice_date?: string;
+}
+
+/**
+ * Get current user's streak data
+ * GET /api/gamification/streak/
+ */
+export const getStreak = async (): Promise<StreakData> => {
+  return apiGet<StreakData>('/gamification/streak/');
+};
+
+/**
+ * Record activity and update streak
+ * POST /api/gamification/activity/
+ * Call this when user completes a practice session
+ */
+export const recordActivity = async (): Promise<StreakData> => {
+  return apiPost<StreakData>('/gamification/activity/', {});
+};
+
 export { ApiError };

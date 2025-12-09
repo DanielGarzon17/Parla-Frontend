@@ -1,7 +1,7 @@
 // FlashCards Practice Page (HU10, HU10.1, HU10.2, HU10.3)
 // Practice saved phrases with gamification using SM-2 spaced repetition
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shuffle, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import {
   FlashcardForPractice 
 } from '@/services/flashcardsService';
 import { getUserStats, completePracticeSession } from '@/services/gamificationService';
+import { useStreak } from '@/contexts/StreakContext';
 import { Achievement } from '@/types/gamification';
 import logo from '@/assets/logo.png';
 import cap2 from '@/assets/cap2.png';
@@ -26,6 +27,7 @@ type SessionState = 'loading' | 'ready' | 'practicing' | 'summary' | 'empty' | '
 const FlashCardsPage = () => {
   const navigate = useNavigate();
   const { isDark } = useTheme();
+  const { recordPractice } = useStreak();
   
   // State
   const [sessionState, setSessionState] = useState<SessionState>('loading');
@@ -40,9 +42,14 @@ const FlashCardsPage = () => {
     newAchievements: Achievement[];
   } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const hasLoadedRef = useRef<boolean>(false);
 
-  // Load due flashcards on mount
+  // Load due flashcards on mount - SINGLE API CALL
   useEffect(() => {
+    // Prevent duplicate calls from React StrictMode
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
+    
     const loadDueFlashcards = async () => {
       try {
         const data = await fetchDueFlashcardsWithPhrases();
@@ -114,6 +121,8 @@ const FlashCardsPage = () => {
         pointsEarned: result.pointsEarned,
         newAchievements: result.newAchievements,
       });
+      // Record activity to update streak
+      recordPractice();
       setSessionState('summary');
     }
   };

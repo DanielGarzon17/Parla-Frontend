@@ -2,7 +2,7 @@
 // Connected to backend API for real stats
 
 import { useState, useEffect } from 'react';
-import { Flame, Trophy, Target, Calendar, TrendingUp, Star, Loader2 } from "lucide-react";
+import { Flame, Trophy, Target, Calendar, TrendingUp, Star, Loader2, Award } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import ParticlesBackground from '@/components/ParticlesBackground';
@@ -10,12 +10,14 @@ import ShareButton from '@/components/ShareButton';
 import { useTheme } from '@/hooks/useTheme';
 import { getUserStats, getAccuracy, getUnlockedAchievementsCount } from '@/services/gamificationService';
 import { fetchUserGameStats, UserGameStats, getPracticeSessions, PracticeSession } from '@/services/gamificationApi';
+import { useStreak } from '@/contexts/StreakContext';
 import { generateStatsShareText } from '@/services/shareService';
 import { Achievement } from '@/types/gamification';
 
 const Progress = () => {
   const navigate = useNavigate();
   const { isDark } = useTheme();
+  const { streak, bestStreak, isLoading: isStreakLoading } = useStreak();
   const [localStats, setLocalStats] = useState(getUserStats());
   const [backendStats, setBackendStats] = useState<UserGameStats | null>(null);
   const [recentSessions, setRecentSessions] = useState<PracticeSession[]>([]);
@@ -125,10 +127,13 @@ const Progress = () => {
                 
                 <div className="relative text-center">
                   <Flame className="w-12 h-12 mx-auto mb-2 animate-pulse" />
-                  <p className="text-5xl font-bold mb-1">{stats.currentStreak}</p>
+                  <p className="text-5xl font-bold mb-1">{streak || stats.currentStreak}</p>
                   <p className="text-sm opacity-80">días de racha</p>
                   <div className="mt-4 pt-4 border-t border-white/20">
-                    <p className="text-xs opacity-70">Mejor racha: {stats.longestStreak} días</p>
+                    <div className="flex items-center justify-center gap-2">
+                      <Award className="w-4 h-4 text-yellow-300" />
+                      <p className="text-sm font-semibold">Mejor racha: {bestStreak || stats.longestStreak} días</p>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from "./contexts/AuthProvider";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { StreakProvider } from "./contexts/StreakContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import ThemeToggle from "./components/ThemeToggle";
@@ -29,7 +30,8 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <TooltipProvider>
+          <StreakProvider>
+            <TooltipProvider>
             <Toaster />
             <Sonner />
             <ThemeToggle />
@@ -95,7 +97,8 @@ const App = () => (
               } />
               </Routes>
             </BrowserRouter>
-          </TooltipProvider>
+            </TooltipProvider>
+          </StreakProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

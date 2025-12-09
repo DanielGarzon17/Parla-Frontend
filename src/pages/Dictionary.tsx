@@ -1,7 +1,7 @@
 // Dictionary Page
 // Search and manage vocabulary words
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Search, 
   Book, 
@@ -18,7 +18,6 @@ import {
   Globe,
   BarChart3,
   BookOpen,
-  Sparkles,
   Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -56,7 +55,6 @@ import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis';
 import { DictionaryWord, DictionaryFilters, DictionarySort, DICTIONARY_SORT_NAMES } from '@/types/dictionary';
 import { 
   LANGUAGE_NAMES, 
-  DIFFICULTY_NAMES, 
   GRAMMATICAL_CATEGORY_NAMES,
   GRAMMATICAL_CATEGORY_COLORS,
   GrammaticalCategory,
@@ -64,17 +62,12 @@ import {
   Difficulty,
 } from '@/types/phrases';
 import {
-  fetchWords,
   searchWords,
   filterWords,
   sortWords,
-  toggleWordFavorite,
-  toggleWordLearned,
-  deleteWord,
-  addWord,
   getWordStats,
 } from '@/services/dictionaryService';
-import { lookupWord, extractUniqueWords, batchLookupWords } from '@/services/translationService';
+import { lookupWord, extractUniqueWords } from '@/services/translationService';
 import { fetchPhrases } from '@/services/phrasesService';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/hooks/useTheme';
@@ -105,6 +98,7 @@ const Dictionary = () => {
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
+  const hasLoadedRef = useRef<boolean>(false);
 
   // New word form
   const [newWord, setNewWord] = useState({
@@ -120,19 +114,120 @@ const Dictionary = () => {
     wordType: 'noun' as GrammaticalCategory,
   });
 
-  // Load words
+  // Load words from phrases - SINGLE API CALL to fetchPhrases
   useEffect(() => {
-    const loadWords = async () => {
+    // Prevent duplicate calls from React StrictMode
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
+    
+    const loadWordsFromPhrases = async () => {
       try {
-        const data = await fetchWords();
-        setWords(data);
+        // 1. Fetch phrases ONCE
+        const phrases = await fetchPhrases();
+        
+        if (phrases.length === 0) {
+          setIsLoading(false);
+          return;
+        }
+        
+        // 2. Extract unique words from all phrases
+        const phraseTexts = phrases.map(p => p.phrase);
+        const uniqueWords = extractUniqueWords(phraseTexts);
+        
+        if (uniqueWords.length === 0) {
+          setIsLoading(false);
+          return;
+        }
+        
+        // 3. Create initial word entries (without translation yet)
+        const initialWords: DictionaryWord[] = uniqueWords.map((word, idx) => ({
+          id: `word_${idx}_${Date.now()}`,
+          word: word,
+          translation: '', // Will be filled by lookup
+          pronunciation: '',
+          definitions: [],
+          examples: [],
+          synonyms: [],
+          antonyms: [],
+          language: 'en' as Language,
+          targetLanguage: 'es' as Language,
+          difficulty: 'medium' as Difficulty,
+          wordType: 'other' as GrammaticalCategory,
+          isFavorite: false,
+          isLearned: false,
+          createdAt: new Date(),
+        }));
+        
+        // 4. Show words immediately (loading state for each)
+        setWords(initialWords);
+        setIsLoading(false);
+        setIsImporting(true);
+        setImportProgress({ current: 0, total: initialWords.length });
+        
+        // 5. Lookup translation and meaning for each word
+        for (let i = 0; i < initialWords.length; i++) {
+          const wordEntry = initialWords[i];
+          setImportProgress({ current: i + 1, total: initialWords.length });
+          
+          try {
+            const result = await lookupWord(wordEntry.word, 'en', 'es');
+            
+            if (result && !result.error) {
+              // Update the word with translation and definitions
+              setWords(prev => prev.map(w => 
+                w.id === wordEntry.id 
+                  ? {
+                      ...w,
+                      translation: result.translation || w.word,
+                      pronunciation: result.pronunciation || '',
+                      definitions: result.definitions.map((d, idx) => ({
+                        id: `d${Date.now()}_${idx}`,
+                        meaning: d.meaning,
+                        partOfSpeech: d.partOfSpeech,
+                      })),
+                      examples: result.examples.slice(0, 2).map((e, idx) => ({
+                        id: `e${Date.now()}_${idx}`,
+                        sentence: e.sentence,
+                        translation: e.translation,
+                      })),
+                      synonyms: result.synonyms || [],
+                      antonyms: result.antonyms || [],
+                      wordType: result.definitions[0]?.partOfSpeech || 'other',
+                    }
+                  : w
+              ));
+            }
+          } catch (err) {
+            console.error(`Error looking up word "${wordEntry.word}":`, err);
+            // Keep the word but mark translation as the word itself
+            setWords(prev => prev.map(w => 
+              w.id === wordEntry.id 
+                ? { ...w, translation: w.word }
+                : w
+            ));
+          }
+          
+          // Small delay to avoid rate limiting
+          if (i < initialWords.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        }
+        
       } catch (error) {
-        console.error('Error loading words:', error);
+        console.error('Error loading phrases:', error);
+        toast({
+          title: 'Error',
+          description: 'No se pudieron cargar las frases',
+          variant: 'destructive',
+        });
       } finally {
         setIsLoading(false);
+        setIsImporting(false);
+        setImportProgress({ current: 0, total: 0 });
       }
     };
-    loadWords();
+    loadWordsFromPhrases();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Filter and sort words
@@ -165,18 +260,16 @@ const Dictionary = () => {
     }
   };
 
-  const handleToggleFavorite = async (id: string) => {
-    const updated = await toggleWordFavorite(id);
-    if (updated) {
-      setWords(prev => prev.map(w => w.id === id ? updated : w));
-    }
+  const handleToggleFavorite = (id: string) => {
+    setWords(prev => prev.map(w => 
+      w.id === id ? { ...w, isFavorite: !w.isFavorite } : w
+    ));
   };
 
-  const handleToggleLearned = async (id: string) => {
-    const updated = await toggleWordLearned(id);
-    if (updated) {
-      setWords(prev => prev.map(w => w.id === id ? updated : w));
-    }
+  const handleToggleLearned = (id: string) => {
+    setWords(prev => prev.map(w => 
+      w.id === id ? { ...w, isLearned: !w.isLearned } : w
+    ));
   };
 
   const handleDeleteClick = (id: string) => {
@@ -239,128 +332,38 @@ const Dictionary = () => {
     }
   };
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = () => {
     if (wordToDelete) {
-      const success = await deleteWord(wordToDelete);
-      if (success) {
-        setWords(prev => prev.filter(w => w.id !== wordToDelete));
-      }
+      setWords(prev => prev.filter(w => w.id !== wordToDelete));
     }
     setIsDeleteDialogOpen(false);
     setWordToDelete(null);
   };
 
-  // Import unique words from saved phrases
-  const handleImportFromPhrases = async () => {
-    setIsImporting(true);
-    
-    try {
-      // 1. Fetch all saved phrases
-      const phrases = await fetchPhrases();
-      const phraseTexts = phrases.map(p => p.phrase);
-      
-      // 2. Extract unique words
-      const uniqueWords = extractUniqueWords(phraseTexts);
-      
-      // 3. Filter out words already in dictionary
-      const existingWords = new Set(words.map(w => w.word.toLowerCase()));
-      const newWords = uniqueWords.filter(w => !existingWords.has(w.toLowerCase()));
-      
-      if (newWords.length === 0) {
-        toast({
-          title: 'No hay palabras nuevas',
-          description: 'Todas las palabras de tus frases ya están en el diccionario',
-        });
-        setIsImporting(false);
-        return;
-      }
-
-      // 4. Limit to first 10 words to avoid quota issues
-      const wordsToImport = newWords.slice(0, 10);
-      setImportProgress({ current: 0, total: wordsToImport.length });
-
-      toast({
-        title: 'Importando palabras...',
-        description: `Procesando ${wordsToImport.length} palabras nuevas`,
-      });
-
-      // 5. Lookup and add each word
-      const results = await batchLookupWords(
-        wordsToImport,
-        'en',
-        'es',
-        (current, total) => setImportProgress({ current, total })
-      );
-
-      // 6. Add successful lookups to dictionary
-      let addedCount = 0;
-      for (const result of results) {
-        if (result.translation) {
-          const created = await addWord({
-            word: result.word,
-            translation: result.translation,
-            pronunciation: result.pronunciation,
-            definitions: result.definitions.map((d, i) => ({
-              id: `d${Date.now()}_${i}`,
-              meaning: d.meaning,
-              partOfSpeech: d.partOfSpeech,
-            })),
-            examples: result.examples.slice(0, 2).map((e, i) => ({
-              id: `e${Date.now()}_${i}`,
-              sentence: e.sentence,
-              translation: e.translation,
-            })),
-            synonyms: result.synonyms,
-            antonyms: result.antonyms,
-            language: 'en',
-            targetLanguage: 'es',
-            difficulty: 'medium',
-            wordType: result.definitions[0]?.partOfSpeech || 'other',
-            isFavorite: false,
-            isLearned: false,
-          });
-          setWords(prev => [created, ...prev]);
-          addedCount++;
-        }
-      }
-
-      toast({
-        title: '¡Importación completada!',
-        description: `Se agregaron ${addedCount} palabras al diccionario`,
-      });
-
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'No se pudieron importar las palabras',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsImporting(false);
-      setImportProgress({ current: 0, total: 0 });
-    }
-  };
-
-  const handleAddWord = async () => {
+  const handleAddWord = () => {
     if (!newWord.word.trim() || !newWord.translation.trim()) return;
 
-    const created = await addWord({
+    const created: DictionaryWord = {
+      id: `word_${Date.now()}`,
       word: newWord.word,
       translation: newWord.translation,
-      pronunciation: newWord.pronunciation || undefined,
+      pronunciation: newWord.pronunciation || '',
       definitions: newWord.definition ? [
         { id: `d${Date.now()}`, meaning: newWord.definition, partOfSpeech: newWord.wordType }
       ] : [],
       examples: newWord.example ? [
         { id: `e${Date.now()}`, sentence: newWord.example, translation: newWord.exampleTranslation }
       ] : [],
+      synonyms: [],
+      antonyms: [],
       language: newWord.language,
       targetLanguage: newWord.targetLanguage,
       difficulty: newWord.difficulty,
       wordType: newWord.wordType,
       isFavorite: false,
       isLearned: false,
-    });
+      createdAt: new Date(),
+    };
 
     setWords(prev => [created, ...prev]);
     setNewWord({
@@ -426,26 +429,6 @@ const Dictionary = () => {
               </div>
 
               <div className="flex items-center gap-3">
-                <Button 
-                  onClick={handleImportFromPhrases} 
-                  disabled={isImporting}
-                  variant="outline"
-                  className="gap-2"
-                >
-                  {isImporting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="hidden sm:inline">
-                        {importProgress.current}/{importProgress.total}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span className="hidden sm:inline">Importar</span>
-                    </>
-                  )}
-                </Button>
                 <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2">
                   <Plus className="w-4 h-4" />
                   <span className="hidden sm:inline">Agregar</span>
@@ -577,9 +560,29 @@ const Dictionary = () => {
           )}
 
           {/* Words List */}
-          {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          {isLoading || isImporting ? (
+            <div className="flex flex-col items-center justify-center py-20 bg-card/80 backdrop-blur rounded-3xl">
+              <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                {isImporting ? 'Importando palabras...' : 'Cargando diccionario...'}
+              </h3>
+              {isImporting && importProgress.total > 0 && (
+                <div className="w-64">
+                  <div className="flex justify-between text-sm text-muted-foreground mb-2">
+                    <span>Procesando palabras</span>
+                    <span>{importProgress.current}/{importProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div 
+                      className="bg-primary h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    Buscando traducciones y definiciones...
+                  </p>
+                </div>
+              )}
             </div>
           ) : displayedWords.length === 0 ? (
             <div className="text-center py-20 bg-card/80 backdrop-blur rounded-3xl">

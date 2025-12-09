@@ -17,6 +17,7 @@ import {
   PracticeSession,
   ApiError
 } from "@/services/gamificationApi";
+import { useStreak } from "@/contexts/StreakContext";
 import confetti from "canvas-confetti";
 import logo from "@/assets/logo.png";
 
@@ -41,6 +42,7 @@ const CARDS_PER_GAME = 6; // 6 pairs
 export const MatchCards = () => {
   const navigate = useNavigate();
   const { isDark } = useTheme();
+  const { recordPractice } = useStreak();
   const containerRef = useRef<HTMLDivElement>(null);
   
   // Game state
@@ -207,6 +209,8 @@ export const MatchCards = () => {
         // Then finish the session
         const response = await finishMatchingSession(session.id);
         setSession(response.session);
+        // Record activity to update streak
+        await recordPractice();
       } catch (error) {
         console.error('Error finishing session:', error);
       }

@@ -82,6 +82,7 @@ export interface ApiPaginatedResponse<T> {
 }
 
 export type ApiPhrasesResponse = ApiPaginatedResponse<ApiPhrase>;
+export type ApiCategoriesResponse = ApiPaginatedResponse<ApiCategory>;
 
 // Legacy type alias for backwards compatibility
 export type Language = LanguageCode;

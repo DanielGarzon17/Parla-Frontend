@@ -1,7 +1,7 @@
 // SavedPhrases page - HU06, HU07, HU15
 // Lista personal de frases guardadas con pronunciación y filtros avanzados
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Filter, Volume2, Plus, BookOpen, Globe, BarChart3, Tag, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,9 @@ import { useTheme } from '@/hooks/useTheme';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -33,14 +35,15 @@ import {
   Language, 
   Difficulty,
   GrammaticalCategory,
+  ApiCategory,
   LANGUAGE_NAMES,
   DIFFICULTY_NAMES,
-  CATEGORIES,
   GRAMMATICAL_CATEGORY_NAMES,
   GRAMMATICAL_CATEGORY_COLORS,
 } from '@/types/phrases';
 import {
   fetchPhrases,
+  fetchCategories,
   toggleFavorite,
   toggleLearned,
   deletePhrase,
@@ -66,6 +69,7 @@ const SavedPhrases = () => {
 
   // State
   const [phrases, setPhrases] = useState<SavedPhrase[]>([]);
+  const [backendCategories, setBackendCategories] = useState<ApiCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -89,6 +93,7 @@ const SavedPhrases = () => {
     translation: '',
     context: '',
     category: '',
+    categoryId: null as number | null, // Backend category ID
     language: 'en' as const,
     difficulty: 'medium' as const,
     wordType: 'phrase' as GrammaticalCategory,
@@ -96,26 +101,36 @@ const SavedPhrases = () => {
   const [createFlashcardOnAdd, setCreateFlashcardOnAdd] = useState(false);
   const [isAddingPhrase, setIsAddingPhrase] = useState(false);
   const { toast } = useToast();
+  const hasLoadedRef = useRef<boolean>(false);
 
-  // Load phrases on mount
+  // Load phrases and categories on mount - SINGLE API CALL
   useEffect(() => {
-    const loadPhrases = async () => {
+    // Prevent duplicate calls from React StrictMode
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
+    
+    const loadData = async () => {
       setError(null);
       try {
-        const data = await fetchPhrases();
-        setPhrases(data);
+        // Load phrases and categories in parallel
+        const [phrasesData, categoriesData] = await Promise.all([
+          fetchPhrases(),
+          fetchCategories(),
+        ]);
+        setPhrases(phrasesData);
+        setBackendCategories(categoriesData);
       } catch (err) {
-        console.error('Error loading phrases:', err);
+        console.error('Error loading data:', err);
         if (err instanceof PhrasesApiError) {
           setError(err.message);
         } else {
-          setError('Error al cargar las frases. Por favor, intenta de nuevo.');
+          setError('Error al cargar los datos. Por favor, intenta de nuevo.');
         }
       } finally {
         setIsLoading(false);
       }
     };
-    loadPhrases();
+    loadData();
   }, []);
 
   // Filter and sort phrases (HU15, HU16)
@@ -161,6 +176,13 @@ const SavedPhrases = () => {
   
   // Get unique word types for filter dropdown (HU16)
   const availableWordTypes = useMemo(() => getUniqueWordTypes(phrases), [phrases]);
+
+  // Group backend categories by type for the add phrase form
+  const groupedCategories = useMemo(() => {
+    const grammar = backendCategories.filter(c => c.type === 'grammar');
+    const theme = backendCategories.filter(c => c.type === 'theme');
+    return { grammar, theme };
+  }, [backendCategories]);
 
   // Stats
   const stats = useMemo(() => ({
@@ -228,6 +250,7 @@ const SavedPhrases = () => {
         translation: newPhrase.translation,
         context: newPhrase.context || undefined,
         category: newPhrase.category || undefined,
+        categoryIds: newPhrase.categoryId ? [newPhrase.categoryId] : undefined,
         language: newPhrase.language,
         difficulty: newPhrase.difficulty,
         wordType: newPhrase.wordType,
@@ -261,7 +284,7 @@ const SavedPhrases = () => {
       }
       
       // Reset form
-      setNewPhrase({ phrase: '', translation: '', context: '', category: '', language: 'en', difficulty: 'medium', wordType: 'phrase' });
+      setNewPhrase({ phrase: '', translation: '', context: '', category: '', categoryId: null, language: 'en', difficulty: 'medium', wordType: 'phrase' });
       setCreateFlashcardOnAdd(false);
       setIsAddDialogOpen(false);
     } catch (error) {
@@ -577,19 +600,59 @@ const SavedPhrases = () => {
             <div className="space-y-2">
               <Label htmlFor="category">Categoría (opcional)</Label>
               <Select
-                value={newPhrase.category}
-                onValueChange={(v) => setNewPhrase(prev => ({ ...prev, category: v }))}
+                value={newPhrase.categoryId?.toString() || ''}
+                onValueChange={(v) => {
+                  const selectedCat = backendCategories.find(c => c.id.toString() === v);
+                  setNewPhrase(prev => ({ 
+                    ...prev, 
+                    category: selectedCat?.name || '',
+                    categoryId: selectedCat?.id || null
+                  }));
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar categoría" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Idioms">Idioms</SelectItem>
-                  <SelectItem value="Proverbs">Proverbs</SelectItem>
-                  <SelectItem value="Expressions">Expressions</SelectItem>
-                  <SelectItem value="Slang">Slang</SelectItem>
-                  <SelectItem value="Formal">Formal</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
+                <SelectContent className="max-h-[300px]">
+                  {groupedCategories.grammar.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        📚 Gramática
+                      </SelectLabel>
+                      {groupedCategories.grammar.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id.toString()}>
+                          <div className="flex flex-col">
+                            <span>{cat.name}</span>
+                            {cat.description && (
+                              <span className="text-xs text-muted-foreground">{cat.description}</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+                  {groupedCategories.theme.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        🏷️ Temática
+                      </SelectLabel>
+                      {groupedCategories.theme.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id.toString()}>
+                          <div className="flex flex-col">
+                            <span>{cat.name}</span>
+                            {cat.description && (
+                              <span className="text-xs text-muted-foreground">{cat.description}</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+                  {backendCategories.length === 0 && (
+                    <SelectItem value="loading" disabled>
+                      Cargando categorías...
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>

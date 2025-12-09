@@ -6,10 +6,12 @@ import { Flame, Trophy, Target, TrendingUp } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { getUserStats, getAccuracy, getUnlockedAchievementsCount } from '@/services/gamificationService';
 import { fetchUserGameStats, UserGameStats } from '@/services/gamificationApi';
+import { useStreak } from '@/contexts/StreakContext';
 import cap3 from "@/assets/cap3.png";
 
 const StatsPanel = () => {
   const { isDark } = useTheme();
+  const { streak, bestStreak, isLoading: isStreakLoading } = useStreak();
   const [localStats, setLocalStats] = useState(getUserStats());
   const [backendStats, setBackendStats] = useState<UserGameStats | null>(null);
   const [isStreakAnimating, setIsStreakAnimating] = useState(false);
@@ -38,21 +40,24 @@ const StatsPanel = () => {
   // Use local stats as base
   const stats = localStats;
 
-  // Animate streak on mount
+  // Animate streak on mount or when streak changes
   useEffect(() => {
-    const currentStreak = stats.currentStreak;
-    if (currentStreak > 0) {
+    if (streak > 0) {
       setIsStreakAnimating(true);
       const timer = setTimeout(() => setIsStreakAnimating(false), 2000);
       return () => clearTimeout(timer);
     }
-  }, [stats.currentStreak]);
+  }, [streak]);
 
   // Use backend stats when available, fallback to local
   const totalPoints = backendStats?.totalPoints || stats.totalPoints;
   const totalPhrasesPracticed = backendStats?.totalPhrasesPracticed || stats.totalPhrasesPracticed;
   const accuracy = backendStats?.accuracy || getAccuracy(stats);
   const unlockedAchievements = getUnlockedAchievementsCount(stats);
+
+  // Use backend streak, fallback to local
+  const currentStreak = streak || stats.currentStreak;
+  const longestStreak = bestStreak || stats.longestStreak;
 
   return (
     <div className="space-y-4">
@@ -83,12 +88,12 @@ const StatsPanel = () => {
             </div>
             <div>
               <span className="text-sm opacity-80">Racha diaria</span>
-              <p className="text-2xl font-bold">{stats.currentStreak} días</p>
+              <p className="text-2xl font-bold">{currentStreak} días</p>
             </div>
           </div>
           <div className="text-right">
             <span className="text-xs opacity-70">Mejor racha</span>
-            <p className="font-bold">{stats.longestStreak} días</p>
+            <p className="font-bold">{longestStreak} días</p>
           </div>
         </div>
       </div>
