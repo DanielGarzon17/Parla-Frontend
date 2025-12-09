@@ -1,7 +1,7 @@
 // Sidebar Component - Global navigation menu
 // Responsive sidebar with user profile and navigation, collapsible on desktop
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { 
@@ -71,6 +71,22 @@ const navSections = [
   },
 ];
 
+// Decode JWT to get user info
+const decodeJWT = (token: string): { name?: string; email?: string; picture?: string } | null => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+};
 
 const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
   const navigate = useNavigate();
@@ -93,6 +109,13 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
     onCollapsedChange?.(isCollapsed);
   }, [isCollapsed, onCollapsedChange]);
 
+  // Decode user info from JWT
+  const userInfo = useMemo(() => {
+    if (user?.credential) {
+      return decodeJWT(user.credential);
+    }
+    return null;
+  }, [user]);
 
   const handleLogout = () => {
     logout();
@@ -110,9 +133,9 @@ const Sidebar = ({ className = '', onCollapsedChange }: SidebarProps) => {
 
   const isActive = (path: string) => location.pathname === path;
 
-  // Get display name from user data
-  const displayName = user?.username || 'Usuario';
-  const userPicture = user?.profile_picture;
+  // Get display name
+  const displayName = userInfo?.name || 'Usuario';
+  const userPicture = userInfo?.picture;
 
   // Sidebar content component for mobile (always expanded)
   const SidebarContentMobile = () => (

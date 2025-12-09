@@ -1,27 +1,22 @@
 // FlashCards Practice Page (HU10, HU10.1, HU10.2, HU10.3)
-// Practice saved phrases with gamification using SM-2 spaced repetition
+// Practice saved phrases with gamification
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shuffle, BookOpen } from 'lucide-react';
+import { ArrowLeft, Shuffle, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import FlashCardPractice from '@/components/FlashCardPractice';
 import SessionSummary from '@/components/SessionSummary';
 import ParticlesBackground from '@/components/ParticlesBackground';
 import { useTheme } from '@/hooks/useTheme';
 import { SavedPhrase } from '@/types/phrases';
-import { PhrasesApiError } from '@/services/phrasesService';
-import { 
-  fetchDueFlashcardsWithPhrases, 
-  answerFlashcard,
-  FlashcardForPractice 
-} from '@/services/flashcardsService';
+import { fetchPhrases } from '@/services/phrasesService';
 import { getUserStats, completePracticeSession } from '@/services/gamificationService';
 import { Achievement } from '@/types/gamification';
 import logo from '@/assets/logo.png';
 import cap2 from '@/assets/cap2.png';
 
-type SessionState = 'loading' | 'ready' | 'practicing' | 'summary' | 'empty' | 'error';
+type SessionState = 'loading' | 'ready' | 'practicing' | 'summary' | 'empty';
 
 const FlashCardsPage = () => {
   const navigate = useNavigate();
@@ -29,8 +24,8 @@ const FlashCardsPage = () => {
   
   // State
   const [sessionState, setSessionState] = useState<SessionState>('loading');
-  const [dueFlashcards, setDueFlashcards] = useState<FlashcardForPractice[]>([]);
-  const [practiceQueue, setPracticeQueue] = useState<FlashcardForPractice[]>([]);
+  const [phrases, setPhrases] = useState<SavedPhrase[]>([]);
+  const [practiceQueue, setPracticeQueue] = useState<SavedPhrase[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [sessionStreak, setSessionStreak] = useState(0);
@@ -39,62 +34,40 @@ const FlashCardsPage = () => {
     pointsEarned: { basePoints: number; streakBonus: number; perfectBonus: number; total: number };
     newAchievements: Achievement[];
   } | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Load due flashcards on mount
+  // Load phrases on mount
   useEffect(() => {
-    const loadDueFlashcards = async () => {
+    const loadPhrases = async () => {
       try {
-        const data = await fetchDueFlashcardsWithPhrases();
-        console.log('Due flashcards loaded:', data);
-        setDueFlashcards(data);
+        const data = await fetchPhrases();
+        setPhrases(data);
         if (data.length === 0) {
           setSessionState('empty');
         } else {
           setSessionState('ready');
         }
       } catch (error) {
-        console.error('Error loading due flashcards:', error);
-        if (error instanceof PhrasesApiError) {
-          setErrorMessage(error.message);
-        } else {
-          setErrorMessage('Error al cargar las flashcards. Por favor, intenta de nuevo.');
-        }
-        setSessionState('error');
+        console.error('Error loading phrases:', error);
+        setSessionState('empty');
       }
     };
-    loadDueFlashcards();
+    loadPhrases();
   }, []);
 
   // Shuffle and prepare practice queue
   const startPractice = () => {
-    const shuffled = [...dueFlashcards].sort(() => Math.random() - 0.5);
-    // Take up to 10 flashcards for a session
-    const sessionFlashcards = shuffled.slice(0, Math.min(10, shuffled.length));
-    setPracticeQueue(sessionFlashcards);
+    const shuffled = [...phrases].sort(() => Math.random() - 0.5);
+    // Take up to 10 phrases for a session
+    const sessionPhrases = shuffled.slice(0, Math.min(10, shuffled.length));
+    setPracticeQueue(sessionPhrases);
     setCurrentIndex(0);
     setCorrectAnswers(0);
     setSessionStreak(0);
     setSessionState('practicing');
   };
 
-  // Handle answer - sends quality to backend SM-2 algorithm
-  // Quality mapping: correct = 4 (good), wrong = 1 (hard/again)
-  const handleAnswer = async (correct: boolean) => {
-    const currentItem = practiceQueue[currentIndex];
-    
-    // Send answer to backend to update SM-2 schedule
-    // Quality: 0-2 = fail, 3-5 = pass (we use 4 for correct, 1 for wrong)
-    const quality = correct ? 4 : 1;
-    
-    try {
-      await answerFlashcard(currentItem.flashcard.phrase, quality);
-      console.log(`Flashcard ${currentItem.flashcard.id} answered with quality ${quality}`);
-    } catch (error) {
-      console.error('Error updating flashcard:', error);
-      // Continue even if update fails - don't block the user
-    }
-    
+  // Handle answer
+  const handleAnswer = (correct: boolean) => {
     if (correct) {
       setCorrectAnswers(prev => prev + 1);
       setSessionStreak(prev => prev + 1);
@@ -118,9 +91,7 @@ const FlashCardsPage = () => {
     }
   };
 
-  // Get current phrase from the practice queue
-  const currentItem = practiceQueue[currentIndex];
-  const currentPhrase: SavedPhrase | undefined = currentItem?.phrase;
+  const currentPhrase = practiceQueue[currentIndex];
 
   return (
     <div className={`min-h-screen relative overflow-hidden transition-colors duration-300 ${
@@ -167,26 +138,6 @@ const FlashCardsPage = () => {
           </div>
         )}
 
-        {/* Error State */}
-        {sessionState === 'error' && (
-          <div className={`text-center backdrop-blur rounded-3xl p-8 max-w-md ${
-            isDark ? 'bg-gray-800/95' : 'bg-card/90'
-          }`}>
-            <div className="w-16 h-16 mx-auto bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
-              <span className="text-3xl">⚠️</span>
-            </div>
-            <h2 className={`text-2xl font-bold mb-2 ${isDark ? 'text-white' : 'text-foreground'}`}>
-              Error al cargar las frases
-            </h2>
-            <p className={`mb-6 ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>
-              {errorMessage}
-            </p>
-            <Button onClick={() => window.location.reload()}>
-              Reintentar
-            </Button>
-          </div>
-        )}
-
         {/* Empty State */}
         {sessionState === 'empty' && (
           <div className={`text-center backdrop-blur rounded-3xl p-8 max-w-md ${
@@ -194,10 +145,10 @@ const FlashCardsPage = () => {
           }`}>
             <BookOpen className={`w-16 h-16 mx-auto mb-4 ${isDark ? 'text-gray-500' : 'text-muted-foreground/50'}`} />
             <h2 className={`text-2xl font-bold mb-2 ${isDark ? 'text-white' : 'text-foreground'}`}>
-              ¡No hay flashcards pendientes!
+              No hay frases para practicar
             </h2>
             <p className={`mb-6 ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>
-              Has completado todas tus flashcards por hoy. Vuelve más tarde o agrega más frases.
+              Agrega algunas frases primero para poder practicar con flashcards.
             </p>
             <Button onClick={() => navigate('/phrases')}>
               Ir a Mis Frases
@@ -215,7 +166,7 @@ const FlashCardsPage = () => {
               ¡Tus Flash-Cards te esperan!
             </h2>
             <p className={`mb-2 ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>
-              Tienes {dueFlashcards.length} flashcards pendientes
+              Tienes {phrases.length} frases disponibles
             </p>
             
             {/* Current streak indicator */}

@@ -64,6 +64,22 @@ import { generateStatsShareText } from '@/services/shareService';
 import { LANGUAGE_NAMES, Language } from '@/types/phrases';
 import logo from '@/assets/logo.png';
 
+// Decode JWT to get user info
+const decodeJWT = (token: string) => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+};
 
 interface UserSettings {
   displayName: string;
@@ -78,7 +94,7 @@ interface UserSettings {
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, isAuthenticated } = useAuth();
   const { isDark } = useTheme();
   const [stats, setStats] = useState(getUserStats());
   const [isEditing, setIsEditing] = useState(false);
@@ -283,7 +299,6 @@ const Profile = () => {
                         src={profileData.profile_picture} 
                         alt={settings.displayName}
                         className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
                       />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">

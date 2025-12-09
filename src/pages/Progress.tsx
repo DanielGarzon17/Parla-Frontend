@@ -1,60 +1,29 @@
 // Progress Page with dynamic stats and achievements (HU10.4, HU10.5, HU17)
-// Connected to backend API for real stats
 
 import { useState, useEffect } from 'react';
-import { Flame, Trophy, Target, Calendar, TrendingUp, Star, Loader2 } from "lucide-react";
+import { Flame, Trophy, Target, Calendar, TrendingUp, Star } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import ParticlesBackground from '@/components/ParticlesBackground';
 import ShareButton from '@/components/ShareButton';
 import { useTheme } from '@/hooks/useTheme';
 import { getUserStats, getAccuracy, getUnlockedAchievementsCount } from '@/services/gamificationService';
-import { fetchUserGameStats, UserGameStats, getPracticeSessions, PracticeSession } from '@/services/gamificationApi';
 import { generateStatsShareText } from '@/services/shareService';
 import { Achievement } from '@/types/gamification';
 
 const Progress = () => {
   const navigate = useNavigate();
   const { isDark } = useTheme();
-  const [localStats, setLocalStats] = useState(getUserStats());
-  const [backendStats, setBackendStats] = useState<UserGameStats | null>(null);
-  const [recentSessions, setRecentSessions] = useState<PracticeSession[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState(getUserStats());
   const [selectedTab, setSelectedTab] = useState<'stats' | 'achievements'>('stats');
 
-  // Fetch stats from backend on mount
+  // Refresh stats on mount
   useEffect(() => {
-    const loadStats = async () => {
-      setIsLoading(true);
-      try {
-        const [gameStats, sessions] = await Promise.all([
-          fetchUserGameStats(),
-          getPracticeSessions()
-        ]);
-        setBackendStats(gameStats);
-        setRecentSessions(sessions.slice(0, 10));
-      } catch (error) {
-        console.error('Error loading stats from backend:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    setLocalStats(getUserStats());
-    loadStats();
+    setStats(getUserStats());
   }, []);
 
-  // Merge local and backend stats
-  const stats = localStats;
-
-  const accuracy = backendStats?.accuracy || getAccuracy(stats);
+  const accuracy = getAccuracy(stats);
   const unlockedCount = getUnlockedAchievementsCount(stats);
-
-  // Use backend stats when available
-  const totalPoints = backendStats?.totalPoints || stats.totalPoints;
-  const totalPhrasesPracticed = backendStats?.totalPhrasesPracticed || stats.totalPhrasesPracticed;
-  const totalSessions = backendStats?.totalSessions || stats.totalSessionsCompleted;
-  const sessionsByType = backendStats?.sessionsByType || { flashcard: 0, timed: 0, matching: 0, quiz: 0 };
 
   // Prepare chart data from weekly progress
   const chartData = stats.weeklyProgress.map(day => ({
@@ -163,22 +132,22 @@ const Progress = () => {
                 {/* Points */}
                 <div className="bg-gradient-to-br from-purple-500 to-indigo-600 text-white rounded-2xl p-4 text-center shadow-lg">
                   <Trophy className="w-8 h-8 mx-auto mb-2" />
-                  <p className="text-2xl font-bold">{isLoading ? '...' : totalPoints.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{stats.totalPoints.toLocaleString()}</p>
                   <p className="text-xs opacity-80">Puntos</p>
                 </div>
 
                 {/* Phrases */}
                 <div className="bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-2xl p-4 text-center shadow-lg">
                   <Star className="w-8 h-8 mx-auto mb-2" />
-                  <p className="text-2xl font-bold">{isLoading ? '...' : totalPhrasesPracticed}</p>
+                  <p className="text-2xl font-bold">{stats.totalPhrasesPracticed}</p>
                   <p className="text-xs opacity-80">Frases</p>
                 </div>
 
-                {/* Sessions */}
+                {/* Achievements */}
                 <div className="bg-gradient-to-br from-yellow-500 to-orange-500 text-white rounded-2xl p-4 text-center shadow-lg">
-                  <TrendingUp className="w-8 h-8 mx-auto mb-2" />
-                  <p className="text-2xl font-bold">{isLoading ? '...' : totalSessions}</p>
-                  <p className="text-xs opacity-80">Sesiones</p>
+                  <Trophy className="w-8 h-8 mx-auto mb-2" />
+                  <p className="text-2xl font-bold">{unlockedCount}/{stats.achievements.length}</p>
+                  <p className="text-xs opacity-80">Logros</p>
                 </div>
               </div>
 

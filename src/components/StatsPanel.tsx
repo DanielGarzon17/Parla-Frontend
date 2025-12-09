@@ -1,42 +1,23 @@
 // StatsPanel with animated streak indicator (HU10.3, HU10.4)
-// Connected to backend API for real stats
 
 import { useEffect, useState } from 'react';
 import { Flame, Trophy, Target, TrendingUp } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { getUserStats, getAccuracy, getUnlockedAchievementsCount } from '@/services/gamificationService';
-import { fetchUserGameStats, UserGameStats } from '@/services/gamificationApi';
 import cap3 from "@/assets/cap3.png";
 
 const StatsPanel = () => {
   const { isDark } = useTheme();
-  const [localStats, setLocalStats] = useState(getUserStats());
-  const [backendStats, setBackendStats] = useState<UserGameStats | null>(null);
+  const [stats, setStats] = useState(getUserStats());
   const [isStreakAnimating, setIsStreakAnimating] = useState(false);
 
-  // Fetch stats from backend on mount
-  useEffect(() => {
-    const loadBackendStats = async () => {
-      try {
-        const stats = await fetchUserGameStats();
-        setBackendStats(stats);
-      } catch (error) {
-        console.error('Error loading backend stats:', error);
-      }
-    };
-    loadBackendStats();
-  }, []);
-
-  // Refresh local stats periodically
+  // Refresh stats periodically
   useEffect(() => {
     const interval = setInterval(() => {
-      setLocalStats(getUserStats());
+      setStats(getUserStats());
     }, 5000);
     return () => clearInterval(interval);
   }, []);
-
-  // Use local stats as base
-  const stats = localStats;
 
   // Animate streak on mount
   useEffect(() => {
@@ -48,10 +29,7 @@ const StatsPanel = () => {
     }
   }, [stats.currentStreak]);
 
-  // Use backend stats when available, fallback to local
-  const totalPoints = backendStats?.totalPoints || stats.totalPoints;
-  const totalPhrasesPracticed = backendStats?.totalPhrasesPracticed || stats.totalPhrasesPracticed;
-  const accuracy = backendStats?.accuracy || getAccuracy(stats);
+  const accuracy = getAccuracy(stats);
   const unlockedAchievements = getUnlockedAchievementsCount(stats);
 
   return (
@@ -102,7 +80,7 @@ const StatsPanel = () => {
             </div>
             <div>
               <span className="text-sm opacity-80">Puntos totales</span>
-              <p className="text-2xl font-bold">{totalPoints.toLocaleString()}</p>
+              <p className="text-2xl font-bold">{stats.totalPoints.toLocaleString()}</p>
             </div>
           </div>
         </div>
@@ -119,7 +97,7 @@ const StatsPanel = () => {
           <span className="font-medium">Frases practicadas</span>
         </div>
         <span className="bg-green-500 text-white px-4 py-1 rounded-lg font-bold">
-          {totalPhrasesPracticed}
+          {stats.totalPhrasesPracticed}
         </span>
       </div>
 

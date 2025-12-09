@@ -1,4 +1,5 @@
 import React, { useState, useEffect, ReactNode } from 'react';
+import { CredentialResponse } from '@react-oauth/google';
 import { AuthContext, User } from './AuthContext';
 
 interface AuthProviderProps {
@@ -20,7 +21,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
-  const login = (credential: User) => {
+  const login = (credential: CredentialResponse) => {
     localStorage.setItem('isAuthenticated', 'true');
     localStorage.setItem('userCredential', JSON.stringify(credential));
     setIsAuthenticated(true);

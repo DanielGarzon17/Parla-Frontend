@@ -2,10 +2,9 @@
 // Lista personal de frases guardadas con pronunciación y filtros avanzados
 
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Filter, Volume2, Plus, BookOpen, Globe, BarChart3, Tag, Loader2 } from 'lucide-react';
+import { Search, Filter, Volume2, Plus, BookOpen, Globe, BarChart3, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useTheme } from '@/hooks/useTheme';
 import {
   Select,
@@ -54,10 +53,7 @@ import {
   filterByWordType,
   getUniqueCategories,
   getUniqueWordTypes,
-  PhrasesApiError,
 } from '@/services/phrasesService';
-import { createFlashcard } from '@/services/flashcardsService';
-import { useToast } from '@/hooks/use-toast';
 import logo from '@/assets/logo.png';
 
 const SavedPhrases = () => {
@@ -67,7 +63,6 @@ const SavedPhrases = () => {
   // State
   const [phrases, setPhrases] = useState<SavedPhrase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<PhraseFilter>('all');
   const [sort, setSort] = useState<PhraseSort>('newest');
@@ -93,24 +88,15 @@ const SavedPhrases = () => {
     difficulty: 'medium' as const,
     wordType: 'phrase' as GrammaticalCategory,
   });
-  const [createFlashcardOnAdd, setCreateFlashcardOnAdd] = useState(false);
-  const [isAddingPhrase, setIsAddingPhrase] = useState(false);
-  const { toast } = useToast();
 
   // Load phrases on mount
   useEffect(() => {
     const loadPhrases = async () => {
-      setError(null);
       try {
         const data = await fetchPhrases();
         setPhrases(data);
-      } catch (err) {
-        console.error('Error loading phrases:', err);
-        if (err instanceof PhrasesApiError) {
-          setError(err.message);
-        } else {
-          setError('Error al cargar las frases. Por favor, intenta de nuevo.');
-        }
+      } catch (error) {
+        console.error('Error loading phrases:', error);
       } finally {
         setIsLoading(false);
       }
@@ -219,61 +205,22 @@ const SavedPhrases = () => {
 
   const handleAddPhrase = async () => {
     if (!newPhrase.phrase.trim() || !newPhrase.translation.trim()) return;
-    
-    setIsAddingPhrase(true);
-    
-    try {
-      const result = await addPhrase({
-        phrase: newPhrase.phrase,
-        translation: newPhrase.translation,
-        context: newPhrase.context || undefined,
-        category: newPhrase.category || undefined,
-        language: newPhrase.language,
-        difficulty: newPhrase.difficulty,
-        wordType: newPhrase.wordType,
-        isFavorite: false,
-        isLearned: false,
-      });
 
-      setPhrases(prev => [result.phrase, ...prev]);
-      
-      // Create flashcard if checkbox is checked
-      if (createFlashcardOnAdd) {
-        try {
-          await createFlashcard(result.phraseId);
-          toast({
-            title: '¡Frase y Flashcard creadas!',
-            description: 'La frase se agregó y se creó una flashcard para practicar.',
-          });
-        } catch (flashcardError) {
-          console.error('Error creating flashcard:', flashcardError);
-          toast({
-            title: 'Frase creada',
-            description: 'La frase se agregó pero hubo un error al crear la flashcard.',
-            variant: 'destructive',
-          });
-        }
-      } else {
-        toast({
-          title: '¡Frase agregada!',
-          description: 'La frase se agregó a tu lista.',
-        });
-      }
-      
-      // Reset form
-      setNewPhrase({ phrase: '', translation: '', context: '', category: '', language: 'en', difficulty: 'medium', wordType: 'phrase' });
-      setCreateFlashcardOnAdd(false);
-      setIsAddDialogOpen(false);
-    } catch (error) {
-      console.error('Error adding phrase:', error);
-      toast({
-        title: 'Error',
-        description: error instanceof PhrasesApiError ? error.message : 'No se pudo agregar la frase.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsAddingPhrase(false);
-    }
+    const created = await addPhrase({
+      phrase: newPhrase.phrase,
+      translation: newPhrase.translation,
+      context: newPhrase.context || undefined,
+      category: newPhrase.category || undefined,
+      language: newPhrase.language,
+      difficulty: newPhrase.difficulty,
+      wordType: newPhrase.wordType,
+      isFavorite: false,
+      isLearned: false,
+    });
+
+    setPhrases(prev => [created, ...prev]);
+    setNewPhrase({ phrase: '', translation: '', context: '', category: '', language: 'en', difficulty: 'medium', wordType: 'phrase' });
+    setIsAddDialogOpen(false);
   };
 
   // English voices for the voice selector
@@ -476,21 +423,6 @@ const SavedPhrases = () => {
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           </div>
-        ) : error ? (
-          <div className="text-center py-20">
-            <div className="w-16 h-16 mx-auto bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
-              <span className="text-3xl">⚠️</span>
-            </div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">
-              Error al cargar las frases
-            </h3>
-            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-              {error}
-            </p>
-            <Button onClick={() => window.location.reload()}>
-              Reintentar
-            </Button>
-          </div>
         ) : displayedPhrases.length === 0 ? (
           <div className="text-center py-20">
             <BookOpen className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
@@ -593,32 +525,15 @@ const SavedPhrases = () => {
                 </SelectContent>
               </Select>
             </div>
-            
-            {/* Checkbox para crear flashcard */}
-            <div className="flex items-center space-x-2 pt-2 border-t">
-              <Checkbox
-                id="createFlashcard"
-                checked={createFlashcardOnAdd}
-                onCheckedChange={(checked) => setCreateFlashcardOnAdd(checked === true)}
-              />
-              <Label 
-                htmlFor="createFlashcard" 
-                className="text-sm font-normal cursor-pointer flex items-center gap-2"
-              >
-                <span>🎴</span>
-                Crear también una Flashcard para practicar
-              </Label>
-            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isAddingPhrase}>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
               Cancelar
             </Button>
             <Button 
               onClick={handleAddPhrase}
-              disabled={!newPhrase.phrase.trim() || !newPhrase.translation.trim() || isAddingPhrase}
+              disabled={!newPhrase.phrase.trim() || !newPhrase.translation.trim()}
             >
-              {isAddingPhrase && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Agregar frase
             </Button>
           </DialogFooter>
