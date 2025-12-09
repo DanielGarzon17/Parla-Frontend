@@ -124,13 +124,7 @@ const StatsPanel = () => {
         </span>
       </div>
 
-      <div className="flex items-center justify-center mt-8">
-        <img 
-          src={cap3} 
-          alt="Capybara mascot" 
-          className="w-full max-w-sm object-contain"
-        />
-      </div>
+      
     </div>
   );
 };
