@@ -288,9 +288,18 @@ const FlashCardsPage = () => {
 
         {/* Idle State - Initial screen before loading */}
         {sessionState === 'idle' && (
-          <div className={`text-center backdrop-blur rounded-3xl p-8 max-w-md ${
+          <div className={`text-center backdrop-blur rounded-3xl p-8 pt-20 max-w-md relative ${
             isDark ? 'bg-gray-800/95' : 'bg-card/90'
           }`}>
+            {/* Capybara Mascot - positioned above the card */}
+            <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-50 h-32 pointer-events-none">
+              <img
+                src={cap2}
+                alt="Capybara mascot"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            
             <h2 className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-foreground'}`}>
               ¡Tus Flash-Cards te esperan!
             </h2>
@@ -350,16 +359,6 @@ const FlashCardsPage = () => {
         )}
       </main>
 
-      {/* Capybara Mascot - only show when not practicing */}
-      {sessionState !== 'practicing' && sessionState !== 'summary' && (
-        <div className="fixed bottom-0 left-0 w-64 h-80 pointer-events-none z-10">
-          <img
-            src={cap2}
-            alt="Capybara mascot"
-            className="w-full h-full object-contain -scale-x-100"
-          />
-        </div>
-      )}
     </div>
   );
 };
