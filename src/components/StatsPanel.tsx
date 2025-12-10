@@ -1,36 +1,77 @@
 // StatsPanel with animated streak indicator (HU10.3, HU10.4)
+// Connected to backend API for real stats
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Flame, Trophy, Target, TrendingUp } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
-import { getUserStats, getAccuracy, getUnlockedAchievementsCount } from '@/services/gamificationService';
+import { getUserStats, getAccuracy } from '@/services/gamificationService';
+import { fetchUserGameStats, UserGameStats, getAchievements, ALL_ACHIEVEMENTS } from '@/services/gamificationApi';
+import { useStreak } from '@/contexts/StreakContext';
+import { usePoints } from '@/contexts/PointsContext';
 import cap3 from "@/assets/cap3.png";
 
 const StatsPanel = () => {
   const { isDark } = useTheme();
-  const [stats, setStats] = useState(getUserStats());
+  const { streak, bestStreak } = useStreak();
+  const { totalPoints: backendPoints } = usePoints();
+  const [localStats, setLocalStats] = useState(getUserStats());
+  const [backendStats, setBackendStats] = useState<UserGameStats | null>(null);
   const [isStreakAnimating, setIsStreakAnimating] = useState(false);
+  const [unlockedCount, setUnlockedCount] = useState(0);
+  const [isLoadingAchievements, setIsLoadingAchievements] = useState(true);
+  const hasLoadedRef = useRef<boolean>(false);
 
-  // Refresh stats periodically
+  // Fetch stats and achievements from backend on mount - ONLY ONCE
+  useEffect(() => {
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
+    
+    const loadBackendData = async () => {
+      try {
+        const [stats, achievements] = await Promise.all([
+          fetchUserGameStats(),
+          getAchievements()
+        ]);
+        setBackendStats(stats);
+        setUnlockedCount(achievements.length);
+      } catch (error) {
+        console.error('Error loading backend stats:', error);
+      } finally {
+        setIsLoadingAchievements(false);
+      }
+    };
+    loadBackendData();
+  }, []);
+
+  // Refresh local stats periodically
   useEffect(() => {
     const interval = setInterval(() => {
-      setStats(getUserStats());
+      setLocalStats(getUserStats());
     }, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // Animate streak on mount
+  // Use local stats as base
+  const stats = localStats;
+
+  // Animate streak on mount or when streak changes
   useEffect(() => {
-    const currentStreak = stats.currentStreak;
-    if (currentStreak > 0) {
+    if (streak > 0) {
       setIsStreakAnimating(true);
       const timer = setTimeout(() => setIsStreakAnimating(false), 2000);
       return () => clearTimeout(timer);
     }
-  }, [stats.currentStreak]);
+  }, [streak]);
 
-  const accuracy = getAccuracy(stats);
-  const unlockedAchievements = getUnlockedAchievementsCount(stats);
+  // Use backend stats when available, fallback to local
+  const totalPoints = backendPoints || backendStats?.totalPoints || stats.totalPoints;
+  const totalPhrasesPracticed = backendStats?.totalPhrasesPracticed || stats.totalPhrasesPracticed;
+  const accuracy = backendStats?.accuracy || getAccuracy(stats);
+  const totalAchievements = ALL_ACHIEVEMENTS.length;
+
+  // Use backend streak, fallback to local
+  const currentStreak = streak || stats.currentStreak;
+  const longestStreak = bestStreak || stats.longestStreak;
 
   return (
     <div className="space-y-4">
@@ -61,12 +102,12 @@ const StatsPanel = () => {
             </div>
             <div>
               <span className="text-sm opacity-80">Racha diaria</span>
-              <p className="text-2xl font-bold">{stats.currentStreak} días</p>
+              <p className="text-2xl font-bold">{currentStreak} días</p>
             </div>
           </div>
           <div className="text-right">
             <span className="text-xs opacity-70">Mejor racha</span>
-            <p className="font-bold">{stats.longestStreak} días</p>
+            <p className="font-bold">{longestStreak} días</p>
           </div>
         </div>
       </div>
@@ -80,14 +121,14 @@ const StatsPanel = () => {
             </div>
             <div>
               <span className="text-sm opacity-80">Puntos totales</span>
-              <p className="text-2xl font-bold">{stats.totalPoints.toLocaleString()}</p>
+              <p className="text-2xl font-bold">{totalPoints.toLocaleString()}</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Phrases Practiced */}
-      <div className={`rounded-2xl p-4 flex items-center justify-between transition-colors duration-300 ${
+      {/* <div className={`rounded-2xl p-4 flex items-center justify-between transition-colors duration-300 ${
         isDark ? 'bg-gray-800' : 'bg-stat-bg'
       } text-stat-foreground`}>
         <div className="flex items-center gap-3">
@@ -97,12 +138,12 @@ const StatsPanel = () => {
           <span className="font-medium">Frases practicadas</span>
         </div>
         <span className="bg-green-500 text-white px-4 py-1 rounded-lg font-bold">
-          {stats.totalPhrasesPracticed}
+          {totalPhrasesPracticed}
         </span>
-      </div>
+      </div> */}
 
       {/* Accuracy */}
-      <div className={`rounded-2xl p-4 flex items-center justify-between transition-colors duration-300 ${
+      {/* <div className={`rounded-2xl p-4 flex items-center justify-between transition-colors duration-300 ${
         isDark ? 'bg-gray-800' : 'bg-stat-bg'
       } text-stat-foreground`}>
         <div className="flex items-center gap-3">
@@ -114,13 +155,13 @@ const StatsPanel = () => {
         <span className="bg-blue-500 text-white px-4 py-1 rounded-lg font-bold">
           {accuracy}%
         </span>
-      </div>
+      </div> */}
 
       {/* Achievements */}
       <div className="bg-stat-bg text-stat-foreground rounded-2xl p-4 flex items-center justify-between">
         <span className="text-lg font-medium">Logros</span>
         <span className="bg-yellow-500 text-white px-4 py-1 rounded-lg font-bold">
-          {unlockedAchievements}/{stats.achievements.length}
+          {isLoadingAchievements ? '...' : `${unlockedCount}/${totalAchievements}`}
         </span>
       </div>
 

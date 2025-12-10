@@ -1,14 +1,25 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { LogOut, BookOpen } from "lucide-react";
+import { LogOut, BookOpen, Loader2 } from "lucide-react";
 
 const PracticeModeMenu = () => {
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      navigate("/login");
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Navigate to login anyway
+      navigate("/login");
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -58,11 +69,21 @@ const PracticeModeMenu = () => {
 
       {/* Logout Button */}
       <button
-        className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground py-3 rounded-xl transition font-semibold flex items-center justify-center gap-2"
+        className="w-full bg-destructive hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed text-destructive-foreground py-3 rounded-xl transition font-semibold flex items-center justify-center gap-2"
         onClick={handleLogout}
+        disabled={isLoggingOut}
       >
-        <LogOut className="w-4 h-4" />
-        Logout
+        {isLoggingOut ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Cerrando sesión...
+          </>
+        ) : (
+          <>
+            <LogOut className="w-4 h-4" />
+            Logout
+          </>
+        )}
       </button>
     </div>
   );

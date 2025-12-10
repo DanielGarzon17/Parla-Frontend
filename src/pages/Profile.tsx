@@ -23,6 +23,7 @@ import {
   Calendar,
   BookOpen,
   Zap,
+  Award,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -60,29 +61,17 @@ import ShareButton from '@/components/ShareButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { getUserStats, getAccuracy, getUnlockedAchievementsCount } from '@/services/gamificationService';
+import { useStreak } from '@/contexts/StreakContext';
+import { usePoints } from '@/contexts/PointsContext';
 import { generateStatsShareText } from '@/services/shareService';
 import { LANGUAGE_NAMES, Language } from '@/types/phrases';
 import logo from '@/assets/logo.png';
 
-// Decode JWT to get user info
-const decodeJWT = (token: string) => {
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
-  } catch {
-    return null;
-  }
-};
 
 interface UserSettings {
   displayName: string;
+  firstName: string;
+  lastName: string;
   email: string;
   nativeLanguage: Language;
   learningLanguage: Language;
@@ -94,18 +83,29 @@ interface UserSettings {
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, refreshUserProfile } = useAuth();
   const { isDark } = useTheme();
+  const { streak, bestStreak } = useStreak();
+  const { totalPoints: backendPoints } = usePoints();
   const [stats, setStats] = useState(getUserStats());
   const [isEditing, setIsEditing] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [profileData, setProfileData] = useState<any>(null);
   
-  // Settings state
+  // Compute display name from backend user data
+  const getDisplayName = () => {
+    if (user?.first_name && user?.last_name) {
+      return `${user.first_name} ${user.last_name}`;
+    }
+    if (user?.first_name) return user.first_name;
+    return user?.username || 'Usuario';
+  };
+
+  // Settings state - using user data directly from backend
   const [settings, setSettings] = useState<UserSettings>({
-    displayName: '',
-    email: '',
+    displayName: getDisplayName(),
+    firstName: user?.first_name || '',
+    lastName: user?.last_name || '',
+    email: user?.email || 'usuario@email.com',
     nativeLanguage: 'es',
     learningLanguage: 'en',
     dailyGoal: 10,
@@ -116,75 +116,44 @@ const Profile = () => {
 
   const [editedSettings, setEditedSettings] = useState<UserSettings>(settings);
 
-  // Cargar datos del usuario desde el backend
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      try {
-        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/users/profile/`, {
-          method: 'GET',
-          credentials: 'include',
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setProfileData(data);
-          // Actualizar settings con datos del backend
-          setSettings(s => ({
-            ...s,
-            displayName: data.first_name && data.last_name ? `${data.first_name} ${data.last_name}` : data.email,
-            email: data.email,
-            // Los idiomas y otras preferencias vendrían del backend si están disponibles
-            nativeLanguage: data.native_language || 'es',
-            learningLanguage: data.learning_language || 'en',
-            dailyGoal: data.daily_goal || 10,
-          }));
-          setEditedSettings(s => ({
-            ...s,
-            displayName: data.first_name && data.last_name ? `${data.first_name} ${data.last_name}` : data.email,
-            email: data.email,
-            nativeLanguage: data.native_language || 'es',
-            learningLanguage: data.learning_language || 'en',
-            dailyGoal: data.daily_goal || 10,
-          }));
-        }
-      } catch (err) {
-        console.error('Error fetching user profile:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUserProfile();
-  }, []);
-
-  // Refresh stats
+  // Refresh stats on mount - user profile is already loaded by AuthProvider
   useEffect(() => {
     setStats(getUserStats());
+    // Note: refreshUserProfile() is NOT called here because AuthProvider
+    // already validates and loads the user profile on app initialization
   }, []);
+
+  // Update settings when user data changes
+  useEffect(() => {
+    if (user) {
+      const displayName = user.first_name && user.last_name 
+        ? `${user.first_name} ${user.last_name}` 
+        : user.first_name || user.username || 'Usuario';
+      
+      setSettings(s => ({
+        ...s,
+        displayName,
+        firstName: user.first_name || '',
+        lastName: user.last_name || '',
+        email: user.email || s.email,
+      }));
+      setEditedSettings(s => ({
+        ...s,
+        displayName,
+        firstName: user.first_name || '',
+        lastName: user.last_name || '',
+        email: user.email || s.email,
+      }));
+    }
+  }, [user]);
 
   const accuracy = getAccuracy(stats);
   const unlockedAchievements = getUnlockedAchievementsCount(stats);
 
-  const handleSaveSettings = async () => {
+  const handleSaveSettings = () => {
     setSettings(editedSettings);
     setIsEditing(false);
-    // Guardar cambios en el backend
-    try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/users/profile/`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          native_language: editedSettings.nativeLanguage,
-          learning_language: editedSettings.learningLanguage,
-          daily_goal: editedSettings.dailyGoal,
-        }),
-      });
-      if (!response.ok) {
-        console.error('Error saving settings');
-      }
-    } catch (err) {
-      console.error('Error saving settings:', err);
-    }
+    // TODO: Save to backend
   };
 
   const handleCancelEdit = () => {
@@ -197,68 +166,73 @@ const Profile = () => {
     navigate('/login');
   };
 
+  // Use backend user data with fallback to context/local
+  const currentStreak = user?.current_streak ?? streak ?? stats.currentStreak;
+  const longestStreak = user?.longest_streak ?? bestStreak ?? stats.longestStreak;
+  const totalPoints = user?.total_points ?? backendPoints ?? stats.totalPoints;
+  
+  // Format date joined
+  const formatDateJoined = () => {
+    if (!user?.date_joined) return 'N/A';
+    return new Date(user.date_joined).toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric'
+    });
+  };
+
   // Stats cards data
   const statsCards = [
     { 
       icon: <Flame className="w-6 h-6" />, 
       label: 'Racha actual', 
-      value: `${stats.currentStreak} días`,
+      value: `${currentStreak} días`,
       color: 'text-orange-500',
       bg: 'bg-orange-500/10',
     },
     { 
+      icon: <Award className="w-6 h-6" />, 
+      label: 'Mejor racha', 
+      value: `${longestStreak} días`,
+      color: 'text-amber-500',
+      bg: 'bg-amber-500/10',
+    },
+    { 
       icon: <Trophy className="w-6 h-6" />, 
       label: 'Puntos totales', 
-      value: stats.totalPoints.toLocaleString(),
+      value: totalPoints.toLocaleString(),
       color: 'text-yellow-500',
       bg: 'bg-yellow-500/10',
     },
-    { 
-      icon: <BookOpen className="w-6 h-6" />, 
-      label: 'Frases practicadas', 
-      value: stats.totalPhrasesPracticed,
-      color: 'text-blue-500',
-      bg: 'bg-blue-500/10',
-    },
-    { 
-      icon: <Target className="w-6 h-6" />, 
-      label: 'Precisión', 
-      value: `${accuracy}%`,
-      color: 'text-green-500',
-      bg: 'bg-green-500/10',
-    },
-    { 
-      icon: <Zap className="w-6 h-6" />, 
-      label: 'Sesiones', 
-      value: stats.totalSessionsCompleted,
-      color: 'text-purple-500',
-      bg: 'bg-purple-500/10',
-    },
+    // { 
+    //   icon: <BookOpen className="w-6 h-6" />, 
+    //   label: 'Frases practicadas', 
+    //   value: stats.totalPhrasesPracticed,
+    //   color: 'text-blue-500',
+    //   bg: 'bg-blue-500/10',
+    // },
+    // { 
+    //   icon: <Target className="w-6 h-6" />, 
+    //   label: 'Precisión', 
+    //   value: `${accuracy}%`,
+    //   color: 'text-green-500',
+    //   bg: 'bg-green-500/10',
+    // },
+    // { 
+    //   icon: <Zap className="w-6 h-6" />, 
+    //   label: 'Sesiones', 
+    //   value: stats.totalSessionsCompleted,
+    //   color: 'text-purple-500',
+    //   bg: 'bg-purple-500/10',
+    // },
     { 
       icon: <Calendar className="w-6 h-6" />, 
-      label: 'Días activos', 
-      value: stats.activeDays,
+      label: 'Miembro desde', 
+      value: formatDateJoined(),
       color: 'text-cyan-500',
       bg: 'bg-cyan-500/10',
     },
   ];
-
-  if (isLoading) {
-    return (
-      <div className={`min-h-screen relative overflow-hidden transition-colors duration-300 ${
-        isDark 
-          ? 'bg-gradient-to-br from-gray-900 via-pink-900/10 to-gray-900' 
-          : 'bg-gradient-to-br from-purple-100 via-pink-50 to-orange-50'
-      }`}>
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-foreground">Cargando perfil...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={`min-h-screen relative overflow-hidden transition-colors duration-300 ${
@@ -294,11 +268,12 @@ const Profile = () => {
               <div className="absolute -top-16 left-6">
                 <div className="relative">
                   <div className="w-32 h-32 rounded-full border-4 border-background overflow-hidden bg-card shadow-xl">
-                    {profileData?.profile_picture ? (
+                    {user?.profile_picture ? (
                       <img 
-                        src={profileData.profile_picture} 
+                        src={user.profile_picture} 
                         alt={settings.displayName}
                         className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
                       />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
@@ -332,7 +307,7 @@ const Profile = () => {
                     </div>
                   </div>
                   
-                  {!isEditing ? (
+                  {/* {!isEditing ? (
                     <Button variant="outline" onClick={() => setIsEditing(true)}>
                       <Edit2 className="w-4 h-4 mr-2" />
                       Editar
@@ -348,7 +323,7 @@ const Profile = () => {
                         Guardar
                       </Button>
                     </div>
-                  )}
+                  )} */}
                 </div>
               </div>
             </CardContent>

@@ -156,7 +156,7 @@ export const getDefinition = async (
     
     if (!response.ok) {
       if (response.status === 404) {
-        console.log(`Word "${word}" not found in dictionary`);
+        //console.log(`Word "${word}" not found in dictionary`);
         return null;
       }
       throw new Error(`Dictionary API error: ${response.status}`);

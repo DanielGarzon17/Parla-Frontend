@@ -1,31 +1,40 @@
 // Match Cards Game (HU12.2)
-// Match phrases with their translations - Two column layout with connecting lines
+// Match phrases with their translations - Connected to backend API
+// Verification is done locally for fluid gameplay, results sent to backend at game end
 
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shuffle, Trophy, Flame, Check, RotateCcw } from "lucide-react";
+import { Shuffle, Trophy, Flame, Check, RotateCcw, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ParticlesBackground from "@/components/ParticlesBackground";
 import { useTheme } from "@/hooks/useTheme";
-import { SavedPhrase } from "@/types/phrases";
-import { fetchPhrases, getRandomPhrases } from "@/services/phrasesService";
-import { getUserStats, completePracticeSession } from "@/services/gamificationService";
 import { playCorrect, playWrong, playComplete, playClick } from "@/services/soundService";
+import {
+  startMatchingSession,
+  checkMatches,
+  finishMatchingSession,
+  MatchingCard,
+  PracticeSession,
+  ApiError
+} from "@/services/gamificationApi";
+import { useStreak } from "@/contexts/StreakContext";
+import { usePoints } from "@/contexts/PointsContext";
+import { useAuth } from "@/hooks/useAuth";
 import confetti from "canvas-confetti";
 import logo from "@/assets/logo.png";
 
-type GameState = 'loading' | 'ready' | 'playing' | 'complete' | 'empty';
+type GameState = 'loading' | 'ready' | 'playing' | 'complete' | 'empty' | 'error';
 
 interface CardItem {
   id: string;
   text: string;
-  phraseId: string;
+  phraseId: number;
   type: 'phrase' | 'translation';
-  index: number; // Position in its column
+  index: number;
 }
 
 interface MatchedLine {
-  phraseId: string;
+  phraseId: number;
   leftIndex: number;
   rightIndex: number;
 }
@@ -35,74 +44,89 @@ const CARDS_PER_GAME = 6; // 6 pairs
 export const MatchCards = () => {
   const navigate = useNavigate();
   const { isDark } = useTheme();
+  const { streak: globalStreak, recordPractice } = useStreak();
+  const { addPoints } = usePoints();
+  const { user } = useAuth();
+  
+  // Get real streak from backend user data
+  const userStreak = user?.current_streak ?? globalStreak ?? 0;
   const containerRef = useRef<HTMLDivElement>(null);
   
   // Game state
-  const [gameState, setGameState] = useState<GameState>('loading');
-  const [phrases, setPhrases] = useState<SavedPhrase[]>([]);
-  const [leftColumn, setLeftColumn] = useState<CardItem[]>([]); // English phrases
-  const [rightColumn, setRightColumn] = useState<CardItem[]>([]); // Spanish translations
+  const [gameState, setGameState] = useState<GameState>('ready');
+  const [leftColumn, setLeftColumn] = useState<CardItem[]>([]);
+  const [rightColumn, setRightColumn] = useState<CardItem[]>([]);
   const [selectedLeft, setSelectedLeft] = useState<string | null>(null);
   const [selectedRight, setSelectedRight] = useState<string | null>(null);
   const [matchedPairs, setMatchedPairs] = useState<MatchedLine[]>([]);
   const [attempts, setAttempts] = useState(0);
+  const [correctMatches, setCorrectMatches] = useState(0);
+  const [incorrectMatches, setIncorrectMatches] = useState(0);
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
-  const [stats, setStats] = useState(getUserStats());
+  const [session, setSession] = useState<PracticeSession | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const [wrongPair, setWrongPair] = useState<{left: string, right: string} | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSavingResults, setIsSavingResults] = useState(false);
+  // Store all match attempts for sending to backend at the end
+  const [matchAttempts, setMatchAttempts] = useState<Array<{ left_id: number; right_id: number }>>([]);
+  // Ref to prevent duplicate game completion calls
+  const hasCompletedRef = useRef<boolean>(false);
 
-  // Load phrases
-  useEffect(() => {
-    const loadPhrases = async () => {
-      try {
-        const allPhrases = await fetchPhrases();
-        if (allPhrases.length < 3) {
-          setGameState('empty');
-          return;
-        }
-        setPhrases(allPhrases);
-        setGameState('ready');
-      } catch (error) {
-        console.error('Error loading phrases:', error);
-        setGameState('empty');
-      }
-    };
-    loadPhrases();
-  }, []);
-
-  // Prepare cards for the game
-  const prepareGame = () => {
-    const selectedPhrases = getRandomPhrases(phrases, CARDS_PER_GAME);
-    
-    // Create left column (English phrases) - shuffled
-    const left: CardItem[] = selectedPhrases.map((phrase, idx) => ({
-      id: `phrase-${phrase.id}`,
-      text: phrase.phrase,
-      phraseId: phrase.id,
-      type: 'phrase' as const,
-      index: idx,
-    })).sort(() => Math.random() - 0.5).map((item, idx) => ({ ...item, index: idx }));
-
-    // Create right column (Spanish translations) - shuffled differently
-    const right: CardItem[] = selectedPhrases.map((phrase, idx) => ({
-      id: `trans-${phrase.id}`,
-      text: phrase.translation,
-      phraseId: phrase.id,
-      type: 'translation' as const,
-      index: idx,
-    })).sort(() => Math.random() - 0.5).map((item, idx) => ({ ...item, index: idx }));
-
-    setLeftColumn(left);
-    setRightColumn(right);
+  // Prepare and start game - calls backend API
+  const prepareGame = async () => {
+    setGameState('loading');
     setSelectedLeft(null);
     setSelectedRight(null);
     setMatchedPairs([]);
     setAttempts(0);
+    setCorrectMatches(0);
+    setIncorrectMatches(0);
     setScore(0);
     setStreak(0);
     setWrongPair(null);
-    setGameState('playing');
+    setErrorMessage(null);
+    setMatchAttempts([]);
+    hasCompletedRef.current = false; // Reset for new game
+
+    try {
+      const response = await startMatchingSession(CARDS_PER_GAME);
+      setSession(response.session);
+      
+      // Transform backend response to CardItem format
+      const left: CardItem[] = response.left.map((card, idx) => ({
+        id: `phrase-${card.id}`,
+        text: card.text,
+        phraseId: card.id,
+        type: 'phrase' as const,
+        index: idx,
+      }));
+
+      const right: CardItem[] = response.right.map((card, idx) => ({
+        id: `trans-${card.id}`,
+        text: card.text,
+        phraseId: card.id,
+        type: 'translation' as const,
+        index: idx,
+      }));
+
+      setLeftColumn(left);
+      setRightColumn(right);
+      setGameState('playing');
+    } catch (error) {
+      console.error('Error starting matching session:', error);
+      if (error instanceof ApiError) {
+        if (error.status === 401) {
+          setErrorMessage('Sesión expirada. Por favor, inicia sesión de nuevo.');
+        } else {
+          setErrorMessage(error.message);
+        }
+      } else {
+        setErrorMessage('Error al iniciar el juego. Por favor, intenta de nuevo.');
+      }
+      setGameState('error');
+    }
   };
 
   // Handle left column card click
@@ -137,7 +161,8 @@ export const MatchCards = () => {
     }
   };
 
-  // Check if selected pair matches
+  // Check if selected pair matches - LOCAL verification (no backend call)
+  // All results are sent to backend only when game completes
   const checkMatch = (leftId: string, rightId: string) => {
     setIsChecking(true);
     setAttempts(prev => prev + 1);
@@ -145,8 +170,16 @@ export const MatchCards = () => {
     const leftCard = leftColumn.find(c => c.id === leftId)!;
     const rightCard = rightColumn.find(c => c.id === rightId)!;
     
+    // Local verification - same phraseId means correct match
     const isMatch = leftCard.phraseId === rightCard.phraseId;
 
+    // Store attempt for sending to backend later
+    setMatchAttempts(prev => [...prev, { 
+      left_id: leftCard.phraseId, 
+      right_id: rightCard.phraseId 
+    }]);
+
+    // Small delay for visual feedback
     setTimeout(() => {
       if (isMatch) {
         playCorrect();
@@ -156,11 +189,13 @@ export const MatchCards = () => {
           rightIndex: rightCard.index,
         };
         setMatchedPairs(prev => [...prev, newMatch]);
+        setCorrectMatches(prev => prev + 1);
         setStreak(prev => prev + 1);
         const streakBonus = streak * 5;
         setScore(prev => prev + 20 + streakBonus);
       } else {
         playWrong();
+        setIncorrectMatches(prev => prev + 1);
         setStreak(0);
         setWrongPair({ left: leftId, right: rightId });
         setTimeout(() => setWrongPair(null), 500);
@@ -169,15 +204,37 @@ export const MatchCards = () => {
       setSelectedLeft(null);
       setSelectedRight(null);
       setIsChecking(false);
-    }, 600);
+    }, 300); // Reduced delay for faster feedback
   };
 
-  // Handle game completion
-  const handleGameComplete = () => {
+  // Handle game completion - sends all results to backend at once
+  const handleGameComplete = async () => {
+    // Prevent duplicate calls
+    if (hasCompletedRef.current) return;
+    hasCompletedRef.current = true;
+    
     playComplete();
-    const totalPairs = leftColumn.length;
-    const result = completePracticeSession('matchcards', totalPairs, totalPairs);
-    setStats(result.stats);
+    setIsSavingResults(true);
+    
+    if (session && matchAttempts.length > 0) {
+      try {
+        // Send all match attempts to backend at once
+        await checkMatches(session.id, matchAttempts);
+        // Then finish the session
+        const response = await finishMatchingSession(session.id);
+        setSession(response.session);
+        // Record activity to update streak
+        await recordPractice();
+        // Send points to backend (score is the total points earned)
+        if (score > 0) {
+          addPoints(score).catch(err => console.error('Error adding points:', err));
+        }
+      } catch (error) {
+        console.error('Error finishing session:', error);
+      }
+    }
+    
+    setIsSavingResults(false);
     
     confetti({
       particleCount: 150,
@@ -193,6 +250,7 @@ export const MatchCards = () => {
     if (gameState === 'playing' && matchedPairs.length === leftColumn.length && leftColumn.length > 0) {
       handleGameComplete();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchedPairs.length, leftColumn.length, gameState]);
 
   // Calculate efficiency
@@ -262,6 +320,33 @@ export const MatchCards = () => {
           </div>
         )}
 
+        {/* Saving Results State */}
+        {isSavingResults && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className={`text-center p-8 rounded-3xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-2xl`}>
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+              <h3 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : ''}`}>¡Excelente!</h3>
+              <p className="text-muted-foreground">Guardando tus resultados...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Error State */}
+        {gameState === 'error' && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center bg-card/90 backdrop-blur rounded-3xl p-8 max-w-md">
+              <div className="w-16 h-16 mx-auto bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
+                <span className="text-3xl">⚠️</span>
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Error al cargar las frases</h2>
+              <p className="text-muted-foreground mb-6">
+                {errorMessage}
+              </p>
+              <Button onClick={() => window.location.reload()}>Reintentar</Button>
+            </div>
+          </div>
+        )}
+
         {/* Empty State */}
         {gameState === 'empty' && (
           <div className="flex-1 flex items-center justify-center">
@@ -285,17 +370,17 @@ export const MatchCards = () => {
                 Encuentra los pares de frases y traducciones
               </p>
               <p className="text-sm text-muted-foreground mb-6">
-                {Math.min(CARDS_PER_GAME, phrases.length)} pares para emparejar
+                {CARDS_PER_GAME} pares para emparejar
               </p>
               
               <div className="flex items-center justify-center gap-4 mb-8">
                 <div className="bg-orange-500/20 px-4 py-2 rounded-xl">
                   <Flame className="w-6 h-6 text-orange-500 mx-auto mb-1" />
-                  <p className="text-sm font-bold">{stats.currentStreak} días</p>
+                  <p className="text-sm font-bold">Emparejar</p>
                 </div>
                 <div className="bg-purple-500/20 px-4 py-2 rounded-xl">
                   <Trophy className="w-6 h-6 text-purple-500 mx-auto mb-1" />
-                  <p className="text-sm font-bold">{stats.totalPoints} pts</p>
+                  <p className="text-sm font-bold">{CARDS_PER_GAME} parejas</p>
                 </div>
               </div>
 
@@ -468,23 +553,28 @@ export const MatchCards = () => {
               {/* <div className="text-6xl mb-4">🎉</div> */}
               <h2 className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : ''}`}>¡Completado!</h2>
               
-              <div className="grid grid-cols-3 gap-4 my-8">
-                <div className={`rounded-xl p-4 ${isDark ? 'bg-green-500/30' : 'bg-green-500/20'}`}>
-                  <p className={`text-2xl font-bold ${isDark ? 'text-green-400' : 'text-green-600'}`}>{matchedPairs.length}</p>
-                  <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Parejas</p>
-                </div>
-                <div className={`rounded-xl p-4 ${isDark ? 'bg-blue-500/30' : 'bg-blue-500/20'}`}>
-                  <p className={`text-2xl font-bold ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>{attempts}</p>
-                  <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Intentos</p>
-                </div>
+              <div className="grid grid-cols-2 gap-4 my-8">
                 <div className={`rounded-xl p-4 ${isDark ? 'bg-purple-500/30' : 'bg-purple-500/20'}`}>
-                  <p className={`text-2xl font-bold ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>{score}</p>
+                  <Target className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
+                  <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-foreground'}`}>{session?.accuracy || efficiency}%</p>
+                  <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Precisión</p>
+                </div>
+                <div className={`rounded-xl p-4 ${isDark ? 'bg-orange-500/30' : 'bg-orange-500/20'}`}>
+                  <Flame className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-orange-400' : 'text-orange-500'}`} />
+                  <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-foreground'}`}>{userStreak}</p>
+                  <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Días de racha</p>
+                </div>
+                <div className={`rounded-xl p-4 ${isDark ? 'bg-green-500/30' : 'bg-green-500/20'}`}>
+                  <Check className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-green-400' : 'text-green-500'}`} />
+                  <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-foreground'}`}>{session?.correct_answers || matchedPairs.length}/{leftColumn.length}</p>
+                  <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Correctas</p>
+                </div>
+                <div className={`rounded-xl p-4 ${isDark ? 'bg-yellow-500/30' : 'bg-yellow-500/20'}`}>
+                  <Trophy className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-yellow-400' : 'text-yellow-500'}`} />
+                  <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-foreground'}`}>+{session?.points_earned || score}</p>
                   <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Puntos</p>
                 </div>
               </div>
-
-              <div className={`text-4xl font-bold mb-2 ${isDark ? 'text-white' : 'text-primary'}`}>{efficiency}%</div>
-              <p className={`mb-8 ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Eficiencia</p>
 
               <div className="flex gap-4">
                 <Button onClick={prepareGame} className={`flex-1 h-12 ${isDark ? 'bg-blue-600 hover:bg-blue-700' : ''}`}>

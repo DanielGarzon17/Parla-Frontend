@@ -99,7 +99,7 @@ const PracticeModeSelector = () => {
       </div>
 
       {/* Quick stats */}
-      <div className="flex items-center justify-center gap-6 pt-4">
+      {/* <div className="flex items-center justify-center gap-6 pt-4">
         <div className="text-center">
           <p className="text-2xl font-bold text-primary">{stats.totalSessionsCompleted}</p>
           <p className="text-xs text-muted-foreground">Sesiones completadas</p>
@@ -114,7 +114,7 @@ const PracticeModeSelector = () => {
           <p className="text-2xl font-bold text-green-500">{stats.totalPoints}</p>
           <p className="text-xs text-muted-foreground">Puntos totales</p>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 };

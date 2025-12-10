@@ -1,22 +1,35 @@
 // Time Trial Page (HU12.1)
-// Practice translating phrases against the clock
+// Practice translating phrases against the clock - Connected to backend API
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Timer, Volume2, SkipForward, Check, X, Trophy, Flame } from "lucide-react";
+import { Timer, Volume2, SkipForward, Check, X, Trophy, Flame, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ParticlesBackground from "@/components/ParticlesBackground";
 import { useTheme } from "@/hooks/useTheme";
-import { SavedPhrase } from "@/types/phrases";
-import { fetchPhrases, getRandomPhrases } from "@/services/phrasesService";
-import { getUserStats, completePracticeSession } from "@/services/gamificationService";
 import { playCorrect, playWrong, playTimeWarning, playTimeUp, playComplete } from "@/services/soundService";
 import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis";
+import { 
+  startTimedSession, 
+  submitTimedAnswer, 
+  finishTimedSession,
+  PracticeSession,
+  ApiError 
+} from "@/services/gamificationApi";
+import { useStreak } from "@/contexts/StreakContext";
+import { usePoints } from "@/contexts/PointsContext";
+import { useAuth } from "@/hooks/useAuth";
 import confetti from "canvas-confetti";
 import cap4 from "@/assets/cap4.png";
 
-type GameState = 'loading' | 'ready' | 'playing' | 'feedback' | 'summary' | 'empty';
+type GameState = 'loading' | 'ready' | 'playing' | 'feedback' | 'summary' | 'empty' | 'error';
+
+// Question from backend
+interface TimedQuestion {
+  id: number;
+  original_text: string;
+}
 
 const TIME_PER_QUESTION = 30; // seconds
 const QUESTIONS_PER_ROUND = 5;
@@ -25,41 +38,50 @@ const TimeTrialPage = () => {
   const navigate = useNavigate();
   const { speak, isSupported } = useSpeechSynthesis();
   const { isDark } = useTheme();
+  const { streak: globalStreak, recordPractice } = useStreak();
+  const { addPoints } = usePoints();
+  const { user } = useAuth();
+  
+  // Get real streak from backend user data
+  const userStreak = user?.current_streak ?? globalStreak ?? 0;
   
   // Game state
-  const [gameState, setGameState] = useState<GameState>('loading');
-  const [phrases, setPhrases] = useState<SavedPhrase[]>([]);
+  const [gameState, setGameState] = useState<GameState>('ready');
+  const [questions, setQuestions] = useState<TimedQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answer, setAnswer] = useState("");
   const [timeLeft, setTimeLeft] = useState(TIME_PER_QUESTION);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
-  const [results, setResults] = useState<{ phrase: SavedPhrase; correct: boolean; userAnswer: string }[]>([]);
-  const [stats, setStats] = useState(getUserStats());
+  const [results, setResults] = useState<{ question: TimedQuestion; correct: boolean; userAnswer: string; correctAnswer?: string }[]>([]);
+  const [session, setSession] = useState<PracticeSession | null>(null);
+  const [totalTimeLimit, setTotalTimeLimit] = useState(60);
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hasCompletedRef = useRef<boolean>(false); // Prevent duplicate completion
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSavingResults, setIsSavingResults] = useState(false);
+  // Store answers locally to send to backend at the end
+  const [pendingAnswers, setPendingAnswers] = useState<Array<{ phraseId: number; userAnswer: string; elapsedSeconds?: number }>>([]);
 
-  // Load phrases
-  useEffect(() => {
-    const loadPhrases = async () => {
-      try {
-        const allPhrases = await fetchPhrases();
-        if (allPhrases.length === 0) {
-          setGameState('empty');
-          return;
-        }
-        const randomPhrases = getRandomPhrases(allPhrases, QUESTIONS_PER_ROUND);
-        setPhrases(randomPhrases);
-        setGameState('ready');
-      } catch (error) {
-        console.error('Error loading phrases:', error);
-        setGameState('empty');
-      }
-    };
-    loadPhrases();
-  }, []);
+  // Handle time up - defined before useEffect to avoid dependency issues
+  const handleTimeUp = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    playTimeUp();
+    setIsCorrect(false);
+    setStreak(0);
+    const currentQ = questions[currentIndex];
+    if (currentQ) {
+      setResults(prev => [...prev, { 
+        question: currentQ, 
+        correct: false, 
+        userAnswer: answer || '(sin respuesta)' 
+      }]);
+    }
+    setGameState('feedback');
+  }, [currentIndex, questions, answer]);
 
   // Timer logic
   useEffect(() => {
@@ -81,68 +103,101 @@ const TimeTrialPage = () => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [gameState, currentIndex]);
+  }, [gameState, currentIndex, handleTimeUp]);
 
-  const handleTimeUp = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    playTimeUp();
-    setIsCorrect(false);
-    setStreak(0);
-    setResults(prev => [...prev, { 
-      phrase: phrases[currentIndex], 
-      correct: false, 
-      userAnswer: answer || '(sin respuesta)' 
-    }]);
-    setGameState('feedback');
-  }, [currentIndex, phrases, answer]);
-
-  const startGame = () => {
+  // Start game - calls backend API
+  const startGame = async () => {
+    setGameState('loading');
     setCurrentIndex(0);
     setScore(0);
     setStreak(0);
     setResults([]);
-    setTimeLeft(TIME_PER_QUESTION);
     setAnswer("");
-    setGameState('playing');
-    setTimeout(() => inputRef.current?.focus(), 100);
-  };
+    setErrorMessage(null);
+    setPendingAnswers([]);
+    hasCompletedRef.current = false; // Reset for new game
 
-  const checkAnswer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    
-    const currentPhrase = phrases[currentIndex];
-    const userAnswer = answer.trim().toLowerCase();
-    const correctAnswer = currentPhrase.translation.toLowerCase();
-    
-    // Check if answer is correct (allowing for some flexibility)
-    const isAnswerCorrect = correctAnswer.includes(userAnswer) || 
-      userAnswer.includes(correctAnswer.split('/')[0].trim()) ||
-      userAnswer === correctAnswer;
-    
-    setIsCorrect(isAnswerCorrect);
-    
-    if (isAnswerCorrect) {
-      playCorrect();
-      const timeBonus = Math.floor(timeLeft / 3);
-      const streakBonus = streak * 2;
-      setScore(prev => prev + 10 + timeBonus + streakBonus);
-      setStreak(prev => prev + 1);
-    } else {
-      playWrong();
-      setStreak(0);
+    try {
+      const response = await startTimedSession(totalTimeLimit, QUESTIONS_PER_ROUND);
+      setSession(response.session);
+      setQuestions(response.questions);
+      setTimeLeft(TIME_PER_QUESTION);
+      setGameState('playing');
+      setTimeout(() => inputRef.current?.focus(), 100);
+    } catch (error) {
+      console.error('Error starting timed session:', error);
+      if (error instanceof ApiError) {
+        if (error.status === 401) {
+          setErrorMessage('Sesión expirada. Por favor, inicia sesión de nuevo.');
+        } else {
+          setErrorMessage(error.message);
+        }
+      } else {
+        setErrorMessage('Error al iniciar la sesión. Por favor, intenta de nuevo.');
+      }
+      setGameState('error');
     }
-    
-    setResults(prev => [...prev, { 
-      phrase: currentPhrase, 
-      correct: isAnswerCorrect, 
-      userAnswer: answer || '(sin respuesta)' 
-    }]);
-    
-    setGameState('feedback');
   };
 
-  const nextQuestion = () => {
-    if (currentIndex < phrases.length - 1) {
+  // Check answer - calls backend API with optimistic UI
+  const checkAnswer = async () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (!session || !questions[currentIndex]) return;
+    
+    const currentQuestion = questions[currentIndex];
+    const userAnswer = answer.trim();
+    const elapsedTime = TIME_PER_QUESTION - timeLeft;
+    
+    // Show checking state briefly for smooth UX
+    setGameState('feedback');
+    setIsCorrect(null); // null = checking
+    
+    try {
+      const response = await submitTimedAnswer(
+        session.id,
+        currentQuestion.id,
+        userAnswer,
+        elapsedTime
+      );
+      
+      const isAnswerCorrect = response.correct;
+      setIsCorrect(isAnswerCorrect);
+      setSession(response.session);
+      
+      if (isAnswerCorrect) {
+        playCorrect();
+        const timeBonus = Math.floor(timeLeft / 3);
+        const streakBonus = streak * 2;
+        setScore(prev => prev + 10 + timeBonus + streakBonus);
+        setStreak(prev => prev + 1);
+      } else {
+        playWrong();
+        setStreak(0);
+      }
+      
+      setResults(prev => [...prev, { 
+        question: currentQuestion, 
+        correct: isAnswerCorrect, 
+        userAnswer: userAnswer || '(sin respuesta)',
+        correctAnswer: response.detail?.phrase?.translated_text
+      }]);
+    } catch (error) {
+      console.error('Error submitting answer:', error);
+      // Continue game even if API fails
+      playWrong();
+      setIsCorrect(false);
+      setStreak(0);
+      setResults(prev => [...prev, { 
+        question: currentQuestion, 
+        correct: false, 
+        userAnswer: userAnswer || '(error)'
+      }]);
+    }
+  };
+
+  // Next question or finish game
+  const nextQuestion = async () => {
+    if (currentIndex < questions.length - 1) {
       setCurrentIndex(prev => prev + 1);
       setAnswer("");
       setTimeLeft(TIME_PER_QUESTION);
@@ -150,13 +205,33 @@ const TimeTrialPage = () => {
       setGameState('playing');
       setTimeout(() => inputRef.current?.focus(), 100);
     } else {
-      // Game complete
-      playComplete();
-      const correctCount = results.filter(r => r.correct).length + (isCorrect ? 1 : 0);
-      const result = completePracticeSession('timetrial', phrases.length, correctCount);
-      setStats(result.stats);
+      // Prevent duplicate completion
+      if (hasCompletedRef.current) return;
+      hasCompletedRef.current = true;
       
-      if (correctCount >= phrases.length * 0.8) {
+      // Game complete - finish session on backend
+      playComplete();
+      setIsSavingResults(true);
+      
+      if (session) {
+        try {
+          const response = await finishTimedSession(session.id);
+          setSession(response.session);
+          // Record activity to update streak
+          await recordPractice();
+          // Send points to backend (score is the total points earned)
+          if (score > 0) {
+            addPoints(score).catch(err => console.error('Error adding points:', err));
+          }
+        } catch (error) {
+          console.error('Error finishing session:', error);
+        }
+      }
+      
+      setIsSavingResults(false);
+      
+      const correctCount = results.filter(r => r.correct).length + (isCorrect ? 1 : 0);
+      if (correctCount >= questions.length * 0.8) {
         confetti({
           particleCount: 100,
           spread: 70,
@@ -168,27 +243,42 @@ const TimeTrialPage = () => {
     }
   };
 
-  const skipQuestion = () => {
+  // Skip question
+  const skipQuestion = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    const currentQuestion = questions[currentIndex];
+    
+    // Submit empty answer to backend
+    if (session && currentQuestion) {
+      try {
+        await submitTimedAnswer(session.id, currentQuestion.id, '', TIME_PER_QUESTION - timeLeft);
+      } catch (error) {
+        console.error('Error skipping question:', error);
+      }
+    }
+    
     setIsCorrect(false);
     setStreak(0);
-    setResults(prev => [...prev, { 
-      phrase: phrases[currentIndex], 
-      correct: false, 
-      userAnswer: '(saltada)' 
-    }]);
+    if (currentQuestion) {
+      setResults(prev => [...prev, { 
+        question: currentQuestion, 
+        correct: false, 
+        userAnswer: '(saltada)' 
+      }]);
+    }
     setGameState('feedback');
   };
 
   const speakPhrase = () => {
-    if (isSupported && phrases[currentIndex]) {
-      speak(phrases[currentIndex].phrase);
+    if (isSupported && questions[currentIndex]) {
+      speak(questions[currentIndex].original_text);
     }
   };
 
-  const currentPhrase = phrases[currentIndex];
+  const currentQuestion = questions[currentIndex];
   const correctCount = results.filter(r => r.correct).length;
-  const accuracy = phrases.length > 0 ? Math.round((correctCount / phrases.length) * 100) : 0;
+  const accuracy = questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0;
+  const finalScore = session?.points_earned || score;
 
   // Timer color based on time left
   const getTimerColor = () => {
@@ -238,6 +328,29 @@ const TimeTrialPage = () => {
             </div>
           )}
 
+          {/* Saving Results State */}
+          {isSavingResults && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className={`text-center p-8 rounded-3xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-2xl`}>
+                <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+                <h3 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : ''}`}>¡Tiempo!</h3>
+                <p className="text-muted-foreground">Guardando tus resultados...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Error State */}
+          {gameState === 'error' && (
+            <div className="text-center py-20 bg-card/90 backdrop-blur rounded-3xl">
+              <div className="w-16 h-16 mx-auto bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
+                <span className="text-3xl">⚠️</span>
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Error al cargar las frases</h2>
+              <p className="text-muted-foreground mb-6">{errorMessage}</p>
+              <Button onClick={() => window.location.reload()}>Reintentar</Button>
+            </div>
+          )}
+
           {/* Empty State */}
           {gameState === 'empty' && (
             <div className="text-center py-20 bg-card/90 backdrop-blur rounded-3xl">
@@ -253,10 +366,9 @@ const TimeTrialPage = () => {
             <div className={`text-center py-12 backdrop-blur rounded-3xl ${
               isDark ? 'bg-gray-800/95' : 'bg-card/90'
             }`}>
-              {/* <div className="text-6xl mb-4">⏱️</div> */}
               <h2 className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : ''}`}>¡Modo Contrarreloj!</h2>
               <p className={`mb-2 ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>
-                Traduce {phrases.length} frases antes de que se acabe el tiempo
+                Traduce {QUESTIONS_PER_ROUND} frases antes de que se acabe el tiempo
               </p>
               <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-muted-foreground'}`}>
                 Tienes {TIME_PER_QUESTION} segundos por frase
@@ -265,11 +377,11 @@ const TimeTrialPage = () => {
               <div className="flex items-center justify-center gap-4 mb-8">
                 <div className={`px-4 py-2 rounded-xl ${isDark ? 'bg-orange-500/30' : 'bg-orange-500/20'}`}>
                   <Flame className={`w-6 h-6 mx-auto mb-1 ${isDark ? 'text-orange-400' : 'text-orange-500'}`} />
-                  <p className={`text-sm font-bold ${isDark ? 'text-white' : ''}`}>{stats.currentStreak} días</p>
+                  <p className={`text-sm font-bold ${isDark ? 'text-white' : ''}`}>Contrarreloj</p>
                 </div>
                 <div className={`px-4 py-2 rounded-xl ${isDark ? 'bg-purple-500/30' : 'bg-purple-500/20'}`}>
                   <Trophy className={`w-6 h-6 mx-auto mb-1 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
-                  <p className={`text-sm font-bold ${isDark ? 'text-white' : ''}`}>{stats.totalPoints} pts</p>
+                  <p className={`text-sm font-bold ${isDark ? 'text-white' : ''}`}>{QUESTIONS_PER_ROUND} preguntas</p>
                 </div>
               </div>
 
@@ -280,13 +392,13 @@ const TimeTrialPage = () => {
           )}
 
           {/* Playing State */}
-          {(gameState === 'playing' || gameState === 'feedback') && currentPhrase && (
+          {(gameState === 'playing' || gameState === 'feedback') && currentQuestion && (
             <div className="grid md:grid-cols-[1fr_auto] gap-8 items-start">
               <div className="space-y-6">
                 {/* Progress & Timer */}
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-muted-foreground">
-                    Pregunta {currentIndex + 1} de {phrases.length}
+                    Pregunta {currentIndex + 1} de {questions.length}
                   </div>
                   <div className={`text-4xl font-bold ${getTimerColor()}`}>
                     {timeLeft}s
@@ -297,7 +409,7 @@ const TimeTrialPage = () => {
                 <div className="w-full bg-muted rounded-full h-2">
                   <div 
                     className="bg-primary h-2 rounded-full transition-all"
-                    style={{ width: `${((currentIndex + 1) / phrases.length) * 100}%` }}
+                    style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
                   />
                 </div>
 
@@ -305,8 +417,7 @@ const TimeTrialPage = () => {
                 <div className="bg-card rounded-3xl p-8 shadow-lg">
                   <div className="flex items-start justify-between mb-4">
                     <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">
-                      {currentPhrase.difficulty === 'easy' ? '🟢 Fácil' : 
-                       currentPhrase.difficulty === 'medium' ? '🟡 Medio' : '🔴 Difícil'}
+                      🎯 Traduce al español
                     </span>
                     {isSupported && (
                       <Button 
@@ -321,14 +432,8 @@ const TimeTrialPage = () => {
                   </div>
                   
                   <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
-                    {currentPhrase.phrase}
+                    {currentQuestion.original_text}
                   </h2>
-                  
-                  {currentPhrase.context && (
-                    <p className="text-sm text-muted-foreground italic">
-                      "{currentPhrase.context}"
-                    </p>
-                  )}
                 </div>
 
                 {/* Answer Input or Feedback */}
@@ -362,7 +467,19 @@ const TimeTrialPage = () => {
                       </Button>
                     </div>
                   </>
+                ) : isCorrect === null ? (
+                  /* Checking state - waiting for backend response */
+                  <div className={`p-6 rounded-2xl ${isDark ? 'bg-gray-700/50' : 'bg-gray-100'}`}>
+                    <div className="flex items-center justify-center gap-3 mb-3">
+                      <div className="animate-spin rounded-full h-8 w-8 border-3 border-primary border-t-transparent"></div>
+                      <span className="text-xl font-bold">Verificando...</span>
+                    </div>
+                    <p className="text-muted-foreground text-center">
+                      Tu respuesta: <span className="font-medium">{answer || '(vacía)'}</span>
+                    </p>
+                  </div>
                 ) : (
+                  /* Result state - correct or incorrect */
                   <div className={`p-6 rounded-2xl ${isCorrect ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
                     <div className="flex items-center gap-3 mb-3">
                       {isCorrect ? (
@@ -378,15 +495,17 @@ const TimeTrialPage = () => {
                     <p className="text-muted-foreground mb-2">
                       Tu respuesta: <span className="font-medium">{answer || '(vacía)'}</span>
                     </p>
-                    <p className="font-medium">
-                      Respuesta correcta: <span className="text-green-600">{currentPhrase.translation}</span>
-                    </p>
+                    {results[currentIndex]?.correctAnswer && (
+                      <p className="font-medium">
+                        Respuesta correcta: <span className="text-green-600">{results[currentIndex].correctAnswer}</span>
+                      </p>
+                    )}
 
                     <Button 
                       onClick={nextQuestion} 
                       className="w-full mt-4 h-12 rounded-xl"
                     >
-                      {currentIndex < phrases.length - 1 ? 'Siguiente' : 'Ver Resultados'}
+                      {currentIndex < questions.length - 1 ? 'Siguiente' : 'Ver Resultados'}
                     </Button>
                   </div>
                 )}
@@ -413,23 +532,28 @@ const TimeTrialPage = () => {
               </div>
               <h2 className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : ''}`}>¡Sesión Completada!</h2>
               
-              <div className="grid grid-cols-3 gap-4 my-8">
+              <div className="grid grid-cols-2 gap-4 my-8">
+                <div className={`rounded-xl p-4 ${isDark ? 'bg-purple-500/30' : 'bg-purple-500/20'}`}>
+                  <Target className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
+                  <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-foreground'}`}>{session?.accuracy || accuracy}%</p>
+                  <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Precisión</p>
+                </div>
+                <div className={`rounded-xl p-4 ${isDark ? 'bg-orange-500/30' : 'bg-orange-500/20'}`}>
+                  <Flame className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-orange-400' : 'text-orange-500'}`} />
+                  <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-foreground'}`}>{userStreak}</p>
+                  <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Días de racha</p>
+                </div>
                 <div className={`rounded-xl p-4 ${isDark ? 'bg-green-500/30' : 'bg-green-500/20'}`}>
-                  <p className={`text-3xl font-bold ${isDark ? 'text-green-400' : 'text-green-600'}`}>{correctCount}</p>
+                  <Check className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-green-400' : 'text-green-500'}`} />
+                  <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-foreground'}`}>{session?.correct_answers || correctCount}/{questions.length}</p>
                   <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Correctas</p>
                 </div>
-                <div className={`rounded-xl p-4 ${isDark ? 'bg-red-500/30' : 'bg-red-500/20'}`}>
-                  <p className={`text-3xl font-bold ${isDark ? 'text-red-400' : 'text-red-600'}`}>{phrases.length - correctCount}</p>
-                  <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Incorrectas</p>
-                </div>
-                <div className={`rounded-xl p-4 ${isDark ? 'bg-purple-500/30' : 'bg-purple-500/20'}`}>
-                  <p className={`text-3xl font-bold ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>{score}</p>
+                <div className={`rounded-xl p-4 ${isDark ? 'bg-yellow-500/30' : 'bg-yellow-500/20'}`}>
+                  <Trophy className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-yellow-400' : 'text-yellow-500'}`} />
+                  <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-foreground'}`}>+{finalScore}</p>
                   <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Puntos</p>
                 </div>
               </div>
-
-              <div className={`text-5xl font-bold mb-2 ${isDark ? 'text-white' : 'text-primary'}`}>{accuracy}%</div>
-              <p className={`mb-8 ${isDark ? 'text-gray-300' : 'text-muted-foreground'}`}>Precisión</p>
 
               {/* Results list */}
               <div className="text-left space-y-2 mb-8 max-h-60 overflow-y-auto">
@@ -448,7 +572,7 @@ const TimeTrialPage = () => {
                       <X className={`w-5 h-5 flex-shrink-0 ${isDark ? 'text-red-400' : 'text-red-500'}`} />
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className={`font-medium truncate ${isDark ? 'text-white' : ''}`}>{result.phrase.phrase}</p>
+                      <p className={`font-medium truncate ${isDark ? 'text-white' : ''}`}>{result.question.original_text}</p>
                       <p className={`text-sm truncate ${isDark ? 'text-gray-400' : 'text-muted-foreground'}`}>
                         {result.userAnswer}
                       </p>
