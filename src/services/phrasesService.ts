@@ -180,29 +180,44 @@ const handleApiResponse = async <T>(response: Response): Promise<T> => {
 };
 
 /**
- * Fetch all categories from the backend API
+ * Fetch categories from the backend API
  * GET /api/phrases/categories/
- * Handles pagination to get all categories
+ * Soporta respuesta paginada (results) o lista directa sin paginación.
  */
 export const fetchCategories = async (): Promise<ApiCategory[]> => {
   try {
-    const allCategories: ApiCategory[] = [];
-    let nextUrl: string | null = CATEGORIES_ENDPOINT;
-    
-    // Fetch all pages of categories
-    while (nextUrl) {
-      const response = await fetch(nextUrl, {
-        method: 'GET',
-        headers: getAuthHeaders(),
-        credentials: 'include',
-      });
+    const response = await fetch(CATEGORIES_ENDPOINT, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
 
-      const data = await handleApiResponse<ApiCategoriesResponse>(response);
-      allCategories.push(...data.results);
-      nextUrl = data.next;
+    const data = await handleApiResponse<ApiCategoriesResponse | ApiCategory[]>(response);
+
+    // DRF paginada: { results, next, previous }
+    if (data && !Array.isArray(data) && 'results' in data) {
+      // Si hay varias páginas, concatenamos iterando next
+      const allCategories: ApiCategory[] = [...data.results];
+      let nextUrl = data.next;
+      while (nextUrl) {
+        const nextResponse = await fetch(nextUrl, {
+          method: 'GET',
+          headers: getAuthHeaders(),
+          credentials: 'include',
+        });
+        const nextData = await handleApiResponse<ApiCategoriesResponse>(nextResponse);
+        allCategories.push(...nextData.results);
+        nextUrl = nextData.next;
+      }
+      return allCategories;
     }
-    
-    return allCategories;
+
+    // Lista directa sin paginación
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    throw new PhrasesApiError('Formato de respuesta de categorías no esperado', undefined);
   } catch (error) {
     if (error instanceof PhrasesApiError) {
       throw error;

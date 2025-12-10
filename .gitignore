@@ -106,3 +106,5 @@ temp/
 
 # TypeScript
 *.tsbuildinfo
+
+.vite.config.ts.*
