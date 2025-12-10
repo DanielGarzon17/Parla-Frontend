@@ -64,14 +64,16 @@ const StatsPanel = () => {
   }, [streak]);
 
   // Use backend stats when available, fallback to local
-  const totalPoints = backendPoints || backendStats?.totalPoints || stats.totalPoints;
-  const totalPhrasesPracticed = backendStats?.totalPhrasesPracticed || stats.totalPhrasesPracticed;
-  const accuracy = backendStats?.accuracy || getAccuracy(stats);
+  // Use ?? instead of || to properly handle 0 values from backend
+  const totalPoints = backendPoints ?? backendStats?.totalPoints ?? stats.totalPoints;
+  const totalPhrasesPracticed = backendStats?.totalPhrasesPracticed ?? stats.totalPhrasesPracticed;
+  const accuracy = backendStats?.accuracy ?? getAccuracy(stats);
   const totalAchievements = ALL_ACHIEVEMENTS.length;
 
   // Use backend streak, fallback to local
-  const currentStreak = streak || stats.currentStreak;
-  const longestStreak = bestStreak || stats.longestStreak;
+  // Use ?? to properly handle 0 values (new users have 0 streak)
+  const currentStreak = streak ?? stats.currentStreak;
+  const longestStreak = bestStreak ?? stats.longestStreak;
 
   return (
     <div className="space-y-4">

@@ -10,7 +10,9 @@ import {
   Trash2, 
   MoreVertical,
   ExternalLink,
-  Edit2
+  Edit2,
+  Layers,
+  Loader2
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -29,6 +31,8 @@ interface PhraseCardProps {
   onToggleLearned: (id: string) => void;
   onDelete: (id: string) => void;
   onEdit?: (phrase: SavedPhrase) => void;
+  onCreateFlashcard?: (phraseId: string) => Promise<void>;
+  hasFlashcard?: boolean;
 }
 
 const PhraseCard = ({
@@ -39,11 +43,24 @@ const PhraseCard = ({
   onToggleLearned,
   onDelete,
   onEdit,
+  onCreateFlashcard,
+  hasFlashcard = false,
 }: PhraseCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isCreatingFlashcard, setIsCreatingFlashcard] = useState(false);
 
   const handleSpeak = () => {
     onSpeak(phrase.phrase);
+  };
+
+  const handleCreateFlashcard = async () => {
+    if (!onCreateFlashcard || isCreatingFlashcard || hasFlashcard) return;
+    setIsCreatingFlashcard(true);
+    try {
+      await onCreateFlashcard(phrase.id);
+    } finally {
+      setIsCreatingFlashcard(false);
+    }
   };
 
   return (
@@ -74,6 +91,36 @@ const PhraseCard = ({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
+          {/* Create Flashcard Button - Only show if not already a flashcard */}
+          {onCreateFlashcard && !hasFlashcard && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-10 w-10 rounded-full transition-colors ${
+                isCreatingFlashcard ? 'bg-purple-500/20 text-purple-500' : 'hover:bg-purple-500/10 text-purple-500'
+              }`}
+              onClick={handleCreateFlashcard}
+              disabled={isCreatingFlashcard}
+              title="Crear Flashcard"
+            >
+              {isCreatingFlashcard ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Layers className="h-5 w-5" />
+              )}
+            </Button>
+          )}
+          
+          {/* Flashcard indicator - Show if already has flashcard */}
+          {hasFlashcard && (
+            <div 
+              className="h-10 w-10 rounded-full bg-green-500/20 flex items-center justify-center"
+              title="Ya tiene Flashcard"
+            >
+              <Layers className="h-5 w-5 text-green-500" />
+            </div>
+          )}
+
           {/* Speak Button (HU07) */}
           <Button
             variant="ghost"

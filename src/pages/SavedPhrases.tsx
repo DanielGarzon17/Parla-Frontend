@@ -59,7 +59,7 @@ import {
   getUniqueWordTypes,
   PhrasesApiError,
 } from '@/services/phrasesService';
-import { createFlashcard } from '@/services/flashcardsService';
+import { createFlashcard, fetchFlashcards } from '@/services/flashcardsService';
 import { useToast } from '@/hooks/use-toast';
 import logo from '@/assets/logo.png';
 
@@ -86,6 +86,9 @@ const SavedPhrases = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   // HU16 - Word type filter
   const [wordTypeFilter, setWordTypeFilter] = useState<string>('all');
+  
+  // Flashcard tracking - Set of phrase IDs that already have flashcards
+  const [phrasesWithFlashcards, setPhrasesWithFlashcards] = useState<Set<string>>(new Set());
 
   // New phrase form state
   const [newPhrase, setNewPhrase] = useState({
@@ -103,7 +106,7 @@ const SavedPhrases = () => {
   const { toast } = useToast();
   const hasLoadedRef = useRef<boolean>(false);
 
-  // Load phrases and categories on mount - SINGLE API CALL
+  // Load phrases, categories, and flashcards on mount - SINGLE API CALL
   useEffect(() => {
     // Prevent duplicate calls from React StrictMode
     if (hasLoadedRef.current) return;
@@ -112,13 +115,20 @@ const SavedPhrases = () => {
     const loadData = async () => {
       setError(null);
       try {
-        // Load phrases and categories in parallel
-        const [phrasesData, categoriesData] = await Promise.all([
+        // Load phrases, categories, and flashcards in parallel
+        const [phrasesData, categoriesData, flashcardsData] = await Promise.all([
           fetchPhrases(),
           fetchCategories(),
+          fetchFlashcards().catch(() => []), // Don't fail if flashcards fail
         ]);
         setPhrases(phrasesData);
         setBackendCategories(categoriesData);
+        
+        // Build set of phrase IDs that have flashcards
+        const flashcardPhraseIds = new Set(
+          flashcardsData.map(fc => fc.phrase.toString())
+        );
+        setPhrasesWithFlashcards(flashcardPhraseIds);
       } catch (err) {
         console.error('Error loading data:', err);
         if (err instanceof PhrasesApiError) {
@@ -237,6 +247,26 @@ const SavedPhrases = () => {
     }
     setIsDeleteDialogOpen(false);
     setPhraseToDelete(null);
+  };
+
+  // Create flashcard from existing phrase
+  const handleCreateFlashcard = async (phraseId: string) => {
+    try {
+      await createFlashcard(parseInt(phraseId));
+      // Add to set of phrases with flashcards
+      setPhrasesWithFlashcards(prev => new Set([...prev, phraseId]));
+      toast({
+        title: "Flashcard creada",
+        description: "La flashcard se ha creado correctamente.",
+      });
+    } catch (err) {
+      console.error('Error creating flashcard:', err);
+      toast({
+        title: "Error",
+        description: "No se pudo crear la flashcard. Puede que ya exista.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleAddPhrase = async () => {
@@ -545,6 +575,8 @@ const SavedPhrases = () => {
                 onToggleFavorite={handleToggleFavorite}
                 onToggleLearned={handleToggleLearned}
                 onDelete={handleDeleteClick}
+                onCreateFlashcard={handleCreateFlashcard}
+                hasFlashcard={phrasesWithFlashcards.has(phrase.id)}
               />
             ))}
           </div>

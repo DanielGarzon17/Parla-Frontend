@@ -138,31 +138,21 @@ const generateWeeklyProgress = (): WeeklyProgress[] => {
   });
 };
 
-// Get default stats
+// Get default stats - Start with zeros for new users
 const getDefaultStats = (): UserStats => ({
-  totalPoints: 1250,
-  currentStreak: 5,
-  longestStreak: 12,
-  lastPracticeDate: new Date().toISOString().split('T')[0],
-  totalPhrasesPracticed: 87,
-  totalCorrectAnswers: 72,
-  totalSessionsCompleted: 23,
-  activeDays: 15,
+  totalPoints: 0,
+  currentStreak: 0,
+  longestStreak: 0,
+  lastPracticeDate: null,
+  totalPhrasesPracticed: 0,
+  totalCorrectAnswers: 0,
+  totalSessionsCompleted: 0,
+  activeDays: 0,
   weeklyProgress: generateWeeklyProgress(),
   achievements: DEFAULT_ACHIEVEMENTS.map(a => ({
     ...a,
-    // Unlock some achievements for demo
-    unlockedAt: a.id === 'first_steps' || a.id === 'streak_3' || a.id === 'phrases_10' 
-      ? new Date() 
-      : null,
-    progress: a.id === 'first_steps' ? 100 
-      : a.id === 'streak_3' ? 100 
-      : a.id === 'streak_7' ? 71 
-      : a.id === 'phrases_10' ? 100 
-      : a.id === 'phrases_50' ? 87 * 2 
-      : a.id === 'points_500' ? 100 
-      : a.id === 'points_1000' ? 125 
-      : Math.floor(Math.random() * 80),
+    unlockedAt: null,
+    progress: 0,
   })),
 });
 
