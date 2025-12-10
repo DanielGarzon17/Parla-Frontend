@@ -754,7 +754,7 @@ These are injected at build time and embedded in the compiled JavaScript.
 
 - Daniel Felipe Garzon Mora [correo](dagarzonmo@unal.edu.co) [LinkedIn](www.linkedin.com/in/dagarzonm/)
 - Karem Nataly Sierra Molina [correo](ksierram@unal.edu.co) [LinkedIn](https://www.linkedin.com/in/karem-nataly-sierra-molina-7a6310223/)
-- Daniel Santiago Cocinero
+- Daniel Santiago Cocinero Jiménez [correo](dcocinero@unal.edu.co) [LinkedIn](www.linkedin.com/in/santiago-cocinero-269946297 )
 - Juan Daniel Ramírez Mojica [correo](juaramirezmo@unal.edu.co) [linkedIn](https://www.linkedin.com/in/juan-daniel-ramirez-ab8311170/)
 - Guillermo Moya Romero [correo](gmoya@unal.edu.co) [linkedIn](www.linkedin.com/in/guillermomoyaromero/)
 - María Paula Román Arévalo [correo](maromana@unal.edu.co)
