@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Layers, Timer, Shuffle, Sparkles } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { getUserStats } from '@/services/gamificationService';
+import cap3 from "@/assets/cap3.png";
 
 interface PracticeMode {
   id: string;
